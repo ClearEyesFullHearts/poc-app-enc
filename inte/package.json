@@ -1,0 +1,21 @@
+{
+    "name": "test-api-aut",
+    "version": "1.0.0",
+    "description": "Integration tests for test",
+    "main": "",
+    "scripts": {
+        "single": "./node_modules/.bin/cucumber-js features/single.feature"
+    },
+    "author": "MFT",
+    "license": "MIT",
+    "dependencies": {
+        "@cucumber/cucumber": "^9.2.0",
+        "apickli": "^3.0.2",
+        "cucumber-html-reporter": "^7.1.0"
+    },
+    "devDependencies": {
+      "eslint": "8.51.0",
+      "eslint-config-airbnb-base": "^15.0.0",
+      "eslint-plugin-import": "^2.28.1"
+    }
+}

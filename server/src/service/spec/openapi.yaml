@@ -1,0 +1,95 @@
+openapi: "3.0.0"
+info:
+  version: 1.0.0
+  title: Auth test
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:4000
+paths:
+  /users:
+    post:
+      summary: Create a new user
+      operationId: createUser
+      x-eov-operation-handler: api.cjs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewUser'
+      responses:
+        '200':
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: unexpected error
+          
+  /login:
+    post:
+      summary: Login
+      operationId: logUser
+      x-eov-operation-handler: api.cjs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Connection'
+      responses:
+        '200':
+          description: A user
+          headers:
+            x-auth-token:
+              schema:
+                type: string
+            x-server-pk:
+              schema:
+                type: string
+                pattern: '^[a-zA-Z0-9\-_]{87}$'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewUser"
+        default:
+          description: unexpected error
+    
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    NewUser:
+      type: object
+      required:
+        - username
+        - password
+      additionalProperties: false
+      properties:
+        username:
+          type: string
+          format: email
+        password:
+          type: string
+          format: byte
+    Connection:
+      type: object
+      required:
+        - username
+        - password
+        - pk
+      additionalProperties: false
+      properties:
+        username:
+          type: string
+          format: email
+        password:
+          type: string
+          format: byte
+        pk:
+          type: string
+          pattern: '^[a-zA-Z0-9\-_]{87}$'
+    
