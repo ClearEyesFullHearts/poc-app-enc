@@ -1,0 +1,12 @@
+{
+  "name": "sssm_protocol_lib",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "workspaces": [
+    "protocol/*"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "module"
+}

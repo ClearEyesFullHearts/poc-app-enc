@@ -1,0 +1,17 @@
+{
+  "name": "@protocol/ejwt",
+  "version": "1.0.0",
+  "author": "MFT",
+  "license": "ISC",
+  "type": "module",
+  "main": "encJWT.js",
+  "dependencies": {
+    "@protocol/crypto": "*",
+    "@protocol/errors": "*"
+  },
+  "devDependencies": {
+    "eslint": "8.51.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.28.1"
+  }
+}
