@@ -1,4 +1,4 @@
-# poc-app-enc
+# Server's stateless session management
 
 ## Permanent Keys
 
