@@ -62,3 +62,10 @@ When its time for Seb to respond:
 So Clara:
 - Clara verify the integrity of the message with Seb's RSA public key (`PK_SIG_ANON_CLAIM`)
 - Clara decrypt the response with the shared secret (`SSK_ENC`)
+
+### After that
+- The time to live of an anonymous eJWT should be very short
+- An anonymous eJWT should be used only once, through an API session or WAF rules
+- The client and the user are 2 different things, the protocol authenticate the client but does nothing to identify the user
+- The only thing you should be able to do with an anonymous eJWT is user authentication
+- The authentication of the user itself depends of the API and should create a longer lived eJWT
