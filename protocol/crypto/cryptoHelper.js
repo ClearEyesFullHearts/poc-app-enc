@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import CryptoError from '@protocol/errors/cryptoError.js';
+import { CryptoError } from '@protocol/errors';
 import Salt from './salt.js';
 import IV from './iVector.js';
 
@@ -258,8 +258,8 @@ class CryptoHelper {
     }
   }
 
-  async verifyWithECDSA(digest, pem) {
-    if (!Buffer.isBuffer(digest) || !Buffer.isBuffer(pem)) {
+  async verifyWithECDSA(digest, signature, pem) {
+    if (!Buffer.isBuffer(digest) || !Buffer.isBuffer(signature)) {
       throw new CryptoError('Crypto Helper class only deals with buffers');
     }
 
@@ -272,6 +272,7 @@ class CryptoHelper {
             key: pem,
             dsaEncoding: 'ieee-p1363',
           },
+          signature,
           (err, result) => {
             if (err) {
               reject(err);

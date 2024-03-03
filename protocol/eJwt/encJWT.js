@@ -1,5 +1,5 @@
 import CryptoHelper from '@protocol/crypto/cryptoHelper.js';
-import EJwtError from '@protocol/errors/eJwtError.js';
+import { EJwtError } from '@protocol/errors';
 
 class EJwt {
   #helper;
