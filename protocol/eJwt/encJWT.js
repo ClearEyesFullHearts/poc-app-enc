@@ -4,6 +4,14 @@ import EJwtError from '@protocol/errors/eJwtError.js';
 class EJwt {
   #helper;
 
+  #validator;
+
+  static #base64urlSize(byteSize) {
+    let strSize = Math.floor((byteSize * 4) / 3);
+    strSize += (byteSize % 3 !== 0) ? 1 : 0;
+    return strSize;
+  }
+
   constructor(cryptoHelper) {
     if (!cryptoHelper) {
       this.#helper = new CryptoHelper();
@@ -14,10 +22,15 @@ class EJwt {
     if (!(this.#helper instanceof CryptoHelper)) {
       throw new EJwtError('Need a valid crypto helper');
     }
+
+    const headerSize = EJwt.#base64urlSize(this.#helper.ivSize + this.#helper.saltSize);
+    const footerSize = EJwt.#base64urlSize(this.#helper.macSize);
+
+    this.#validator = new RegExp(`^[a-zA-Z0-9\\-_]{${headerSize}}\\.[a-zA-Z0-9\\-_]+?\\.[a-zA-Z0-9\\-_]{${footerSize}}$`);
   }
 
   async sign(payload, secret, sessionInfo = '', ad = {}) {
-    const bufMK = Buffer.from(secret, 'base64');
+    const bufMK = Buffer.from(secret, 'base64url');
     const bufInfo = Buffer.from(sessionInfo);
     const {
       key,
@@ -33,37 +46,29 @@ class EJwt {
       cipherBuffer: bufToken,
     } = this.#helper.aesEncrypt(bufClear, encKey);
 
-    const mac = this.#helper.getHMAC(macKey, iv, salt, bufToken, Buffer.from(JSON.stringify(ad)));
+    const mac = this.#helper.getHMAC(macKey, iv, bufToken, salt, Buffer.from(JSON.stringify(ad)));
 
     return `${Buffer.concat([iv, salt]).toString('base64url')}.${bufToken.toString('base64url')}.${mac.toString('base64url')}`;
   }
 
-  async verify(ejwt, secret, sessionInfo = '', ad = {}) {
-    const [
-      saltAndIvb64,
-      tokenb64,
-      macb64,
-    ] = ejwt.split('.');
-
-    if (!saltAndIvb64 || !tokenb64 || !macb64) {
+  async verify(token, secret, sessionInfo = '', ad = {}) {
+    if (!this.#validator.test(token)) {
       throw new EJwtError('jwt is malformed');
     }
+    const [
+      saltAndIvb64,
+      bodyb64,
+      macb64,
+    ] = token.split('.');
 
     const saltAndIv = Buffer.from(saltAndIvb64, 'base64url');
-    const token = Buffer.from(tokenb64, 'base64url');
+    const body = Buffer.from(bodyb64, 'base64url');
     const mac = Buffer.from(macb64, 'base64url');
 
     const iv = saltAndIv.subarray(0, CryptoHelper.ivSize);
     const salt = saltAndIv.subarray(CryptoHelper.ivSize);
-    if (salt.length !== CryptoHelper.saltSize) {
-      throw new EJwtError('iv or salt size mismatch');
-    }
 
-    if (mac.length !== CryptoHelper.macSize) {
-      throw new EJwtError('MAC size mismatch');
-    }
-
-    const bufMK = Buffer.from(secret, 'base64');
+    const bufMK = Buffer.from(secret, 'base64url');
     const bufInfo = Buffer.from(sessionInfo);
 
     const {
@@ -73,13 +78,13 @@ class EJwt {
     const encKey = key.subarray(0, 32);
     const macKey = key.subarray(32);
 
-    const control = this.#helper.getHMAC(macKey, iv, salt, token, Buffer.from(JSON.stringify(ad)));
+    const control = this.#helper.getHMAC(macKey, iv, body, salt, Buffer.from(JSON.stringify(ad)));
 
     if (!mac.equals(control)) {
       throw new EJwtError('jwt authentication failed');
     }
 
-    const bufDeciphered = this.#helper.aesDecrypt(token, encKey, iv);
+    const bufDeciphered = this.#helper.aesDecrypt(body, encKey, iv);
 
     try {
       return JSON.parse(Buffer.from(bufDeciphered));
