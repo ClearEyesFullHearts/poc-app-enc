@@ -6,10 +6,8 @@ class EJwt {
 
   #validator;
 
-  static #base64urlSize(byteSize) {
-    let strSize = Math.floor((byteSize * 4) / 3);
-    strSize += (byteSize % 3 !== 0) ? 1 : 0;
-    return strSize;
+  get crypto() {
+    return this.#helper;
   }
 
   constructor(cryptoHelper) {
@@ -23,8 +21,8 @@ class EJwt {
       throw new EJwtError('Need a valid crypto helper');
     }
 
-    const headerSize = EJwt.#base64urlSize(this.#helper.ivSize + this.#helper.saltSize);
-    const footerSize = EJwt.#base64urlSize(this.#helper.macSize);
+    const headerSize = CryptoHelper.base64urlSize(CryptoHelper.ivSize + CryptoHelper.saltSize);
+    const footerSize = CryptoHelper.base64urlSize(this.#helper.macSize);
 
     this.#validator = new RegExp(`^[a-zA-Z0-9\\-_]{${headerSize}}\\.[a-zA-Z0-9\\-_]+?\\.[a-zA-Z0-9\\-_]{${footerSize}}$`);
   }
@@ -41,12 +39,13 @@ class EJwt {
     const macKey = key.subarray(32);
 
     const bufClear = Buffer.from(JSON.stringify(payload));
+    const bufData = Buffer.from(JSON.stringify(ad));
     const {
       iv,
       cipherBuffer: bufToken,
-    } = this.#helper.aesEncrypt(bufClear, encKey);
+    } = this.#helper.aesEncrypt(bufClear, encKey, bufData);
 
-    const mac = this.#helper.getHMAC(macKey, iv, bufToken, salt, Buffer.from(JSON.stringify(ad)));
+    const mac = this.#helper.getHMAC(macKey, iv, bufToken, salt, bufData);
 
     return `${Buffer.concat([iv, salt]).toString('base64url')}.${bufToken.toString('base64url')}.${mac.toString('base64url')}`;
   }

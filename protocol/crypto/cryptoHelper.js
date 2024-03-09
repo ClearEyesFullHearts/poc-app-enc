@@ -27,7 +27,6 @@ class CryptoHelper {
     macAlgo = 'sha256',
     rsaSignAlgo = 'rsa-sha256',
     ecdsaSignAlgo = 'sha256',
-  }, {
     sharedSecretInfo = 'uniformly_random_shared_secret',
   }) {
     this.#NAMED_CURVE = ecCurveName;
@@ -44,6 +43,17 @@ class CryptoHelper {
 
     if (!['prime256v1', 'secp384r1', 'secp521r1'].includes(this.#NAMED_CURVE)) {
       throw new CryptoError(`Curve name (${this.#NAMED_CURVE}) is not available, use one of 'prime256v1', 'secp384r1' or'secp521r1'`);
+    }
+
+    switch (this.#RSA_SIG_ALGO) {
+      case 'rsa-sha256':
+        Salt.Size = 32;
+        break;
+      case 'rsa-sha512':
+        Salt.Size = 64;
+        break;
+      default:
+        throw new CryptoError(`RSA signature algorithm (${this.#RSA_SIG_ALGO}) is not available, use one of 'rsa-sha256', 'rsa-sha512'`);
     }
   }
 
@@ -73,6 +83,23 @@ class CryptoHelper {
       default:
         return 32;
     }
+  }
+
+  get ecPkSize() {
+    switch (this.#NAMED_CURVE) {
+      case 'secp384r1':
+        return 97;
+      case 'secp521r1':
+        return 133;
+      default:
+        return 65;
+    }
+  }
+
+  static base64urlSize(byteSize) {
+    let strSize = Math.floor((byteSize * 4) / 3);
+    strSize += (byteSize % 3 !== 0) ? 1 : 0;
+    return strSize;
   }
 
   async generateECDHKeys(pk) {
@@ -119,7 +146,7 @@ class CryptoHelper {
   }
 
   async deriveKey(masterKey, info, usedSalt, size = 32) {
-    if (!Buffer.isBuffer(masterKey) || !Buffer.isBuffer(info) || !Buffer.isBuffer(usedSalt)) {
+    if (!Buffer.isBuffer(masterKey) || !Buffer.isBuffer(info) || (!!usedSalt && !Buffer.isBuffer(usedSalt))) {
       throw new CryptoError('Crypto Helper class only deals with buffers');
     }
     const salt = new Salt(usedSalt);
@@ -228,7 +255,7 @@ class CryptoHelper {
   }
 
   async signWithRSA(digest, pem) {
-    if (!Buffer.isBuffer(digest) || !Buffer.isBuffer(pem)) {
+    if (!Buffer.isBuffer(digest)) {
       throw new CryptoError('Crypto Helper class only deals with buffers');
     }
 
@@ -259,7 +286,7 @@ class CryptoHelper {
   }
 
   async verifyWithECDSA(digest, signature, pem) {
-    if (!Buffer.isBuffer(digest) || !Buffer.isBuffer(signature)) {
+    if (!Buffer.isBuffer(digest) || !Buffer.isBuffer(signature) || !Buffer.isBuffer(pem)) {
       throw new CryptoError('Crypto Helper class only deals with buffers');
     }
 

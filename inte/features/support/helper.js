@@ -11,6 +11,8 @@ class Helper {
 
   static REQ_INFO = 'purpose is request decryption';
 
+  static SHARED_INFO = 'uniformly_random_shared_secret';
+
   static generateECDHKeys() {
     const alice = crypto.createECDH(this.NAMED_CURVE);
     alice.generateKeys();
@@ -21,11 +23,22 @@ class Helper {
     };
   }
 
-  static getSharedSecret(privK, pubK) {
+  static getSharedSecret(privK, pubK, salt) {
     const bob = crypto.createECDH(this.NAMED_CURVE);
     bob.setPrivateKey(privK);
 
-    return bob.computeSecret(pubK);
+    const tss = bob.computeSecret(pubK);
+    const hkdfUIntArray = crypto.hkdfSync(
+      this.DERIVATION_ALGO,
+      tss,
+      salt,
+      Buffer.from(this.SHARED_INFO),
+      32,
+    );
+
+    // hkdfSync doesn't return a Buffer object but a typed array
+    // To be consistent we convert it to a real Buffer
+    return Buffer.from(hkdfUIntArray);
   }
 
   static deriveKey(masterKey, info, usedSalt, size = 32) {
@@ -127,6 +140,21 @@ class Helper {
     const bufDeciphered = this.aesDecrypt(token, key, iv);
 
     return bufDeciphered.toString();
+  }
+
+  static verifyRSASignature(digest, signature, pem) {
+    return crypto.verify('rsa-sha256', digest, {
+      key: pem,
+      padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+      saltLength: 32,
+    }, signature);
+  }
+
+  static signWithEcdsa(digest, pem) {
+    return crypto.sign('SHA256', digest, {
+      key: pem,
+      dsaEncoding: 'ieee-p1363',
+    });
   }
 }
 

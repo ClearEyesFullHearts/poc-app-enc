@@ -1,5 +1,6 @@
 const apickli = require('apickli');
 const request = require('request');
+const fs = require('fs');
 const {
   Before, BeforeAll,
 } = require('@cucumber/cucumber');
@@ -20,9 +21,14 @@ BeforeAll((cb) => {
 
     const body = Helper.encryptRequest(Buffer.from(JSON.stringify(encBody)), Buffer.from(tss, 'base64url'));
 
+    console.log('this.scenarioVariables.EC_SIG_CLIENT_SK', this.scenarioVariables.EC_SIG_CLIENT_SK);
+    const key = Buffer.from(this.scenarioVariables.EC_SIG_CLIENT_SK, 'base64url');
+    const signature = Helper.signWithEcdsa(Buffer.from(body), this.scenarioVariables.EC_SIG_CLIENT_SK);
+
     options.url = `${this.domain}/api`;
     options.method = 'POST';
-    options.headers = this.headers;
+    options.headers.Authorization = this.headers.Authorization;
+    options.headers['X-Signature-Request'] = signature.toString('base64url');
     options.headers['Content-Type'] = 'text/plain';
     options.headers['Content-Length'] = Buffer.from(body, 'utf8').length;
     options.body = body;
@@ -48,6 +54,9 @@ BeforeAll((cb) => {
 Before(function () {
   const host = 'localhost:4000';
   const protocol = 'http';
+
+  const pem = fs.readFileSync(`${__dirname}/../data/rsaPK.pem`);
+  this.PK_SIG_ANON_CLAIM = pem;
 
   this.apickli = new apickli.Apickli(protocol, host, 'data');
   this.apickli.addRequestHeader('Cache-Control', 'no-cache');
