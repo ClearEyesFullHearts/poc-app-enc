@@ -357,8 +357,6 @@ class CryptoHelper {
       throw new CryptoError('Crypto Helper class only deals with buffers');
     }
 
-    // const pemSK = `${this.#privHeader}\n${Buffer.from(pem, 'base64url').toString('base64')}\n${this.#privFooter}`;
-
     try {
       const signature = await new Promise((resolve, reject) => {
         crypto.sign(
@@ -416,21 +414,20 @@ class CryptoHelper {
     }
   }
 
-  async verifyWithECDSA(digest, signature, pem) {
+  async verifyRSASignature(digest, signature, pem) {
     if (!Buffer.isBuffer(digest) || !Buffer.isBuffer(signature)) {
       throw new CryptoError('Crypto Helper class only deals with buffers');
     }
 
-    const pemPK = `${this.#pubHeader}\n${Buffer.from(pem, 'base64url').toString('base64')}\n${this.#pubFooter}`;
-
     try {
       const verification = await new Promise((resolve, reject) => {
         crypto.verify(
-          this.#ECDSA_SIG_ALGO,
+          this.#RSA_SIG_ALGO,
           digest,
           {
-            key: pemPK,
-            dsaEncoding: 'ieee-p1363',
+            key: pem,
+            padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+            saltLength: 32,
           },
           signature,
           (err, result) => {
@@ -449,22 +446,21 @@ class CryptoHelper {
     }
   }
 
-  async verifyRSASignature(digest, signature, pem) {
+  async verifyWithECDSA(digest, signature, pem) {
     if (!Buffer.isBuffer(digest) || !Buffer.isBuffer(signature)) {
       throw new CryptoError('Crypto Helper class only deals with buffers');
     }
 
-    // const pemPK = `${this.#pubHeader}\n${Buffer.from(pem, 'base64url').toString('base64')}\n${this.#pubFooter}`;
+    const pemPK = `${this.#pubHeader}\n${Buffer.from(pem, 'base64url').toString('base64')}\n${this.#pubFooter}`;
 
     try {
       const verification = await new Promise((resolve, reject) => {
         crypto.verify(
-          this.#RSA_SIG_ALGO,
+          this.#ECDSA_SIG_ALGO,
           digest,
           {
-            key: pem,
-            padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
-            saltLength: 32,
+            key: pemPK,
+            dsaEncoding: 'ieee-p1363',
           },
           signature,
           (err, result) => {
