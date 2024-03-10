@@ -7,48 +7,49 @@ const {
 const Helper = require('./helper');
 
 BeforeAll((cb) => {
-  apickli.Apickli.prototype.sendEncrypted = function (method, resource, callback) {
-    const self = this;
+  Helper.init().then(() => {
+    apickli.Apickli.prototype.sendEncrypted = async function sendEncrypted(method, resource, callback) {
+      const self = this;
 
-    const options = this.httpRequestOptions || {};
-    const encBody = {};
-    encBody.url = resource;
-    encBody.method = method;
-    encBody.headers = this.headers;
-    encBody.body = this.requestBody;
+      const options = this.httpRequestOptions || {};
+      const encBody = {};
+      encBody.url = resource;
+      encBody.method = method;
+      encBody.headers = this.headers;
+      encBody.body = this.requestBody;
 
-    const tss = this.scenarioVariables.SHARED_SECRET;
+      const tss = this.scenarioVariables.SHARED_SECRET;
 
-    const body = Helper.encryptRequest(Buffer.from(JSON.stringify(encBody)), Buffer.from(tss, 'base64url'));
+      const body = await Helper.encryptRequest(Buffer.from(JSON.stringify(encBody)), Buffer.from(tss, 'base64url'), {});
 
-    console.log('this.scenarioVariables.EC_SIG_CLIENT_SK', this.scenarioVariables.EC_SIG_CLIENT_SK);
-    const key = Buffer.from(this.scenarioVariables.EC_SIG_CLIENT_SK, 'base64url');
-    const signature = Helper.signWithEcdsa(Buffer.from(body), this.scenarioVariables.EC_SIG_CLIENT_SK);
+      const pem = this.scenarioVariables.EC_SIG_CLIENT_SK;
+      const signature = await Helper.cryptograph.signWithEcdsa(Buffer.from(body), pem);
 
-    options.url = `${this.domain}/api`;
-    options.method = 'POST';
-    options.headers.Authorization = this.headers.Authorization;
-    options.headers['X-Signature-Request'] = signature.toString('base64url');
-    options.headers['Content-Type'] = 'text/plain';
-    options.headers['Content-Length'] = Buffer.from(body, 'utf8').length;
-    options.body = body;
+      options.url = `${this.domain}/protected`;
+      options.method = 'POST';
+      options.headers.Authorization = this.headers.Authorization;
+      options.headers['X-Signature-Request'] = signature.toString('base64url');
+      options.headers['Content-Type'] = 'text/plain';
+      options.headers['Content-Length'] = Buffer.from(body, 'utf8').length;
+      options.body = body;
 
-    request(options, (error, response) => {
-      if (error) {
-        return callback(error);
-      }
-      console.log('raw response.body', response.body);
-      console.log('raw response.statusCode', response.statusCode);
+      request(options, async (error, response) => {
+        if (error) {
+          return callback(error);
+        }
+        // console.log('raw response.body', response.body);
+        // console.log('raw response.statusCode', response.statusCode);
 
-      self.httpResponse = response;
-      if (response.statusCode < 300) {
-        self.httpResponse.body = Helper.decryptResponse(response.body, Buffer.from(tss, 'base64url'));
-      }
-      return callback(null, response);
-    });
-  };
+        self.httpResponse = response;
+        if (response.statusCode < 300) {
+          self.httpResponse.body = await Helper.decryptResponse(response.body, Buffer.from(tss, 'base64url'));
+        }
+        return callback(null, response);
+      });
+    };
 
-  cb();
+    cb();
+  });
 });
 
 Before(function () {

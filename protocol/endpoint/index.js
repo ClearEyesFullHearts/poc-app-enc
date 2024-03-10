@@ -10,7 +10,9 @@ class Endpoints {
 
   #crypto;
 
-  #PKValidator;
+  #EncPKValidator;
+
+  #SigPKValidator;
 
   #reqValidator;
 
@@ -26,9 +28,10 @@ class Endpoints {
     this.#crypto = this.#ejwt.crypto;
     this.#ttl = timeToLive;
 
-    const encodedPKSize = CryptoHelper.base64urlSize(this.#crypto.ecPkSize);
+    const encPKSize = CryptoHelper.base64urlSize(this.#crypto.ecdhPkSize);
 
-    this.#PKValidator = new RegExp(`^[a-zA-Z0-9\\-_]{${encodedPKSize}}$`);
+    this.#EncPKValidator = new RegExp(`^[a-zA-Z0-9\\-_]{${encPKSize}}$`);
+    this.#SigPKValidator = new RegExp(`^[a-zA-Z0-9\\-_]{${this.#crypto.ecdsaPkSize}}$`);
 
     const headerSize = CryptoHelper.base64urlSize(CryptoHelper.ivSize + CryptoHelper.saltSize);
 
@@ -38,10 +41,10 @@ class Endpoints {
   async handshake(pkEnc, pkSig, {
     sessionInfo = '', sessionAD = {},
   }) {
-    if (!this.#PKValidator.test(pkEnc)) {
+    if (!this.#EncPKValidator.test(pkEnc)) {
       throw new EndpointError('Invalid encryption public key format');
     }
-    if (!this.#PKValidator.test(pkSig)) {
+    if (!this.#SigPKValidator.test(pkSig)) {
       throw new EndpointError('Invalid signature public key format');
     }
 
@@ -101,10 +104,12 @@ class Endpoints {
     const digest = Buffer.from(cipheredBody);
     const signature = Buffer.from(proof, 'base64url');
     const pkVerif = Buffer.from(pk, 'base64url');
+
     const isVerifiedBody = await this.#crypto.verifyWithECDSA(digest, signature, pkVerif);
     if (!isVerifiedBody) {
       throw new EndpointError('ciphered body is invalid');
     }
+
     const [
       saltAndIvb64,
       bodyb64,

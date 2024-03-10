@@ -20,6 +20,14 @@ class CryptoHelper {
 
   #SHARED_INFO;
 
+  #pubHeader = '-----BEGIN PUBLIC KEY-----';
+
+  #pubFooter = '-----END PUBLIC KEY-----';
+
+  #privHeader = '-----BEGIN PRIVATE KEY-----';
+
+  #privFooter = '-----END PRIVATE KEY-----';
+
   constructor({
     ecCurveName = 'prime256v1',
     symmetricEncryptionAlgo = 'aes-256-gcm',
@@ -45,16 +53,16 @@ class CryptoHelper {
       throw new CryptoError(`Curve name (${this.#NAMED_CURVE}) is not available, use one of 'prime256v1', 'secp384r1' or'secp521r1'`);
     }
 
-    switch (this.#RSA_SIG_ALGO) {
-      case 'rsa-sha256':
-        Salt.Size = 32;
-        break;
-      case 'rsa-sha512':
-        Salt.Size = 64;
-        break;
-      default:
-        throw new CryptoError(`RSA signature algorithm (${this.#RSA_SIG_ALGO}) is not available, use one of 'rsa-sha256', 'rsa-sha512'`);
-    }
+    // switch (this.#RSA_SIG_ALGO) {
+    //   case 'rsa-sha256':
+    //     Salt.Size = 32;
+    //     break;
+    //   case 'rsa-sha512':
+    //     Salt.Size = 64;
+    //     break;
+    //   default:
+    //     throw new CryptoError(`RSA signature algorithm (${this.#RSA_SIG_ALGO}) is not available, use one of 'rsa-sha256', 'rsa-sha512'`);
+    // }
   }
 
   static get saltSize() {
@@ -85,7 +93,7 @@ class CryptoHelper {
     }
   }
 
-  get ecPkSize() {
+  get ecdhPkSize() {
     switch (this.#NAMED_CURVE) {
       case 'secp384r1':
         return 97;
@@ -96,6 +104,17 @@ class CryptoHelper {
     }
   }
 
+  get ecdsaPkSize() {
+    switch (this.#NAMED_CURVE) {
+      case 'secp384r1':
+        return 160;
+      case 'secp521r1':
+        return 211;
+      default:
+        return 122;
+    }
+  }
+
   static base64urlSize(byteSize) {
     let strSize = Math.floor((byteSize * 4) / 3);
     strSize += (byteSize % 3 !== 0) ? 1 : 0;
@@ -103,12 +122,19 @@ class CryptoHelper {
   }
 
   async generateECDHKeys(pk) {
-    if (!Buffer.isBuffer(pk)) {
+    if (!!pk && !Buffer.isBuffer(pk)) {
       throw new CryptoError('Crypto Helper class only deals with buffers');
     }
     try {
       const me = crypto.createECDH(this.#NAMED_CURVE);
       me.generateKeys();
+
+      if (!pk) {
+        return {
+          ssk: me.getPrivateKey(),
+          spk: me.getPublicKey(),
+        };
+      }
 
       const tss = me.computeSecret(pk);
 
@@ -145,8 +171,45 @@ class CryptoHelper {
     }
   }
 
+  async generateECDSAKeys() {
+    const keyPair = await new Promise((resolve, reject) => {
+      crypto.generateKeyPair(
+        'ec',
+        {
+          namedCurve: this.#NAMED_CURVE,
+          publicKeyEncoding: { type: 'spki', format: 'pem' },
+          privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+        },
+        (err, publicKey, privateKey) => {
+          if (err) return reject(err);
+
+          return resolve({
+            privateKey, publicKey,
+          });
+        },
+      );
+    });
+
+    const { privateKey, publicKey } = keyPair;
+
+    const trimmedPK = publicKey.replace(/\n/g, '');
+    const pemPK = trimmedPK
+      .substring(this.#pubHeader.length, trimmedPK.length - this.#pubFooter.length);
+
+    const trimmedSK = privateKey.replace(/\n/g, '');
+    const pemSK = trimmedSK
+      .substring(this.#privHeader.length, trimmedSK.length - this.#privFooter.length);
+
+    return {
+      ssk: Buffer.from(pemSK, 'base64').toString('base64url'),
+      spk: Buffer.from(pemPK, 'base64').toString('base64url'),
+    };
+  }
+
   async deriveKey(masterKey, info, usedSalt, size = 32) {
-    if (!Buffer.isBuffer(masterKey) || !Buffer.isBuffer(info) || (!!usedSalt && !Buffer.isBuffer(usedSalt))) {
+    if (!Buffer.isBuffer(masterKey)
+      || !Buffer.isBuffer(info)
+      || (!!usedSalt && !Buffer.isBuffer(usedSalt))) {
       throw new CryptoError('Crypto Helper class only deals with buffers');
     }
     const salt = new Salt(usedSalt);
@@ -183,8 +246,43 @@ class CryptoHelper {
     }
   }
 
+  async getSharedSecret(privK, pubK, salt) {
+    if (!Buffer.isBuffer(privK)
+        || !Buffer.isBuffer(pubK)
+        || !Buffer.isBuffer(salt)) {
+      throw new CryptoError('Crypto Helper class only deals with buffers');
+    }
+    const me = crypto.createECDH(this.#NAMED_CURVE);
+    me.setPrivateKey(privK);
+
+    const tss = me.computeSecret(pubK);
+
+    const hkdfUIntArray = await new Promise((resolve, reject) => {
+      crypto.hkdf(
+        this.#DERIVATION_ALGO,
+        tss,
+        salt,
+        Buffer.from(this.#SHARED_INFO),
+        this.sharedSecretSize,
+        (err, derivedKey) => {
+          if (err) {
+            reject(err);
+          }
+
+          resolve(derivedKey);
+        },
+      );
+    });
+
+    // hkdfSync doesn't return a Buffer object but a typed array
+    // To be consistent we convert it to a real Buffer
+    return Buffer.from(hkdfUIntArray);
+  }
+
   aesEncrypt(message, key, aad) {
-    if (!Buffer.isBuffer(message) || !Buffer.isBuffer(key) || !Buffer.isBuffer(aad)) {
+    if (!Buffer.isBuffer(message)
+        || !Buffer.isBuffer(key)
+        || !Buffer.isBuffer(aad)) {
       throw new CryptoError('Crypto Helper class only deals with buffers');
     }
 
@@ -259,6 +357,8 @@ class CryptoHelper {
       throw new CryptoError('Crypto Helper class only deals with buffers');
     }
 
+    // const pemSK = `${this.#privHeader}\n${Buffer.from(pem, 'base64url').toString('base64')}\n${this.#privFooter}`;
+
     try {
       const signature = await new Promise((resolve, reject) => {
         crypto.sign(
@@ -267,7 +367,38 @@ class CryptoHelper {
           {
             key: pem,
             padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
-            saltLength: Salt.Size,
+            saltLength: 32,
+          },
+          (err, result) => {
+            if (err) {
+              reject(err);
+            }
+
+            resolve(result);
+          },
+        );
+      });
+
+      return signature;
+    } catch (err) {
+      throw new CryptoError(err);
+    }
+  }
+
+  async signWithEcdsa(digest, pem) {
+    if (!Buffer.isBuffer(digest)) {
+      throw new CryptoError('Crypto Helper class only deals with buffers');
+    }
+
+    const pemSK = `${this.#privHeader}\n${Buffer.from(pem, 'base64url').toString('base64')}\n${this.#privFooter}`;
+    try {
+      const signature = await new Promise((resolve, reject) => {
+        crypto.sign(
+          this.#ECDSA_SIG_ALGO,
+          digest,
+          {
+            key: pemSK,
+            dsaEncoding: 'ieee-p1363',
           },
           (err, result) => {
             if (err) {
@@ -286,9 +417,11 @@ class CryptoHelper {
   }
 
   async verifyWithECDSA(digest, signature, pem) {
-    if (!Buffer.isBuffer(digest) || !Buffer.isBuffer(signature) || !Buffer.isBuffer(pem)) {
+    if (!Buffer.isBuffer(digest) || !Buffer.isBuffer(signature)) {
       throw new CryptoError('Crypto Helper class only deals with buffers');
     }
+
+    const pemPK = `${this.#pubHeader}\n${Buffer.from(pem, 'base64url').toString('base64')}\n${this.#pubFooter}`;
 
     try {
       const verification = await new Promise((resolve, reject) => {
@@ -296,8 +429,42 @@ class CryptoHelper {
           this.#ECDSA_SIG_ALGO,
           digest,
           {
-            key: pem,
+            key: pemPK,
             dsaEncoding: 'ieee-p1363',
+          },
+          signature,
+          (err, result) => {
+            if (err) {
+              reject(err);
+            }
+
+            resolve(result);
+          },
+        );
+      });
+
+      return verification;
+    } catch (err) {
+      throw new CryptoError(err);
+    }
+  }
+
+  async verifyRSASignature(digest, signature, pem) {
+    if (!Buffer.isBuffer(digest) || !Buffer.isBuffer(signature)) {
+      throw new CryptoError('Crypto Helper class only deals with buffers');
+    }
+
+    // const pemPK = `${this.#pubHeader}\n${Buffer.from(pem, 'base64url').toString('base64')}\n${this.#pubFooter}`;
+
+    try {
+      const verification = await new Promise((resolve, reject) => {
+        crypto.verify(
+          this.#RSA_SIG_ALGO,
+          digest,
+          {
+            key: pem,
+            padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+            saltLength: 32,
           },
           signature,
           (err, result) => {

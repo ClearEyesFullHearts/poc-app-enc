@@ -1,13 +1,9 @@
-import Ejwt from '../../../lib/eJWT.js';
-import CryptoHelper from '../../../lib/cryptoHelper.js';
-import Secret from '../../../lib/secrets.js';
-
 export function createUser(req, res) {
   console.log('createUser', req.body);
   res.json({ success: true });
 }
 
-export function logUser(req, res) {
+export async function logUser(req, res) {
   console.log('logUser', req.body);
   const {
     username,
@@ -16,9 +12,19 @@ export function logUser(req, res) {
   } = req.body;
 
   const {
-    tss,
+    locals: {
+      crypto,
+      eJwt,
+      secret,
+    },
+  } = req;
+
+  const key = Buffer.from(pk, 'base64url');
+  const {
     spk,
-  } = CryptoHelper.generateECDHKeys(Buffer.from(pk, 'base64url'));
+    tss,
+    salt,
+  } = await crypto.generateECDHKeys(key);
 
   const claims = {
     tss,
@@ -27,13 +33,13 @@ export function logUser(req, res) {
       username,
       role: 'user',
     },
-    iat: Date.now() + (1000 * 5),
+    iat: Date.now(),
   };
+  const authKey = await secret.getKeyAuth();
+  const jwt = await eJwt.sign(claims, authKey, username);
 
-  const secret = new Secret();
-  const jwt = Ejwt.getEJWT(claims, secret.keyAuth);
   res.set('x-auth-token', jwt);
-  res.set('x-server-pk', spk.toString('base64url'));
+  res.set('x-server-pk', Buffer.concat([spk, salt]).toString('base64url'));
   res.json({
     username,
     password,

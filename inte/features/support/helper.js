@@ -1,117 +1,34 @@
 const crypto = require('crypto');
+// import CryptoHelper from '@protocol/crypto/cryptoHelper';
+
 const Salt = require('./salt');
 const IV = require('./iVector');
 
 class Helper {
-  static NAMED_CURVE = 'prime256v1';
+  static cryptograph;
 
-  static DERIVATION_ALGO = 'sha256';
-
-  static AES_ALGO = 'aes-256-gcm';
-
-  static REQ_INFO = 'purpose is request decryption';
-
-  static SHARED_INFO = 'uniformly_random_shared_secret';
-
-  static generateECDHKeys() {
-    const alice = crypto.createECDH(this.NAMED_CURVE);
-    alice.generateKeys();
-
-    return {
-      ssk: alice.getPrivateKey(),
-      spk: alice.getPublicKey(),
-    };
+  static async init() {
+    const CryptoHelper = (await import('@protocol/crypto/cryptoHelper.js')).default;
+    this.cryptograph = new CryptoHelper({});
   }
 
-  static getSharedSecret(privK, pubK, salt) {
-    const bob = crypto.createECDH(this.NAMED_CURVE);
-    bob.setPrivateKey(privK);
-
-    const tss = bob.computeSecret(pubK);
-    const hkdfUIntArray = crypto.hkdfSync(
-      this.DERIVATION_ALGO,
-      tss,
-      salt,
-      Buffer.from(this.SHARED_INFO),
-      32,
-    );
-
-    // hkdfSync doesn't return a Buffer object but a typed array
-    // To be consistent we convert it to a real Buffer
-    return Buffer.from(hkdfUIntArray);
-  }
-
-  static deriveKey(masterKey, info, usedSalt, size = 32) {
-    const salt = new Salt(usedSalt);
-    const bufInfo = Buffer.concat([info, salt.value]);
-
-    const hkdfUIntArray = crypto.hkdfSync(
-      this.DERIVATION_ALGO,
-      masterKey,
-      Buffer.alloc(size),
-      bufInfo,
-      size,
-    );
-
-    // hkdfSync doesn't return a Buffer object but a typed array
-    // To be consistent we convert it to a real Buffer
-    const key = Buffer.from(hkdfUIntArray);
-
-    return {
-      key,
-      salt: salt.value,
-    };
-  }
-
-  static aesEncrypt(clear, key) {
-    const iv = new IV().value;
-
-    const cipher = crypto.createCipheriv(
-      this.AES_ALGO,
-      key,
-      iv,
-      { authTagLength: 16 },
-    );
-
-    const cipherBuffer = Buffer.concat([
-      cipher.update(clear),
-      cipher.final(),
-      cipher.getAuthTag(), // 16 bytes auth tag is appended to the end
-    ]);
-
-    return {
-      cipherBuffer,
-      iv,
-    };
-  }
-
-  static aesDecrypt(ciphered, key, iv) {
-    // extract the auth tag
-    const authTag = ciphered.subarray(ciphered.length - 16);
-    const crypted = ciphered.subarray(0, ciphered.length - 16);
-
-    const decipher = crypto.createDecipheriv(this.AES_ALGO, key, iv);
-    decipher.setAuthTag(authTag);
-    return Buffer.concat([decipher.update(crypted), decipher.final()]);
-  }
-
-  static encryptRequest(bufferReq, masterKey) {
+  static async encryptRequest(bufferReq, masterKey, aad = {}) {
     const bufMK = Buffer.from(masterKey, 'base64url');
-    const bufInfo = Buffer.from(this.REQ_INFO);
+    const bufInfo = Buffer.from('');
     const {
       key,
       salt,
-    } = this.deriveKey(bufMK, bufInfo);
+    } = await this.cryptograph.deriveKey(bufMK, bufInfo);
 
     const {
       iv,
       cipherBuffer,
-    } = this.aesEncrypt(bufferReq, key);
+    } = this.cryptograph.aesEncrypt(bufferReq, key, Buffer.from(JSON.stringify(aad)));
 
     return `${Buffer.concat([iv, salt]).toString('base64url')}.${cipherBuffer.toString('base64url')}`;
   }
 
-  static decryptResponse(ciphertext, masterKey) {
+  static async decryptResponse(ciphertext, masterKey, aad = {}) {
     const [
       saltAndIvb64,
       tokenb64,
@@ -131,30 +48,15 @@ class Helper {
     }
 
     const bufMK = Buffer.from(masterKey, 'base64');
-    const bufInfo = Buffer.from(this.REQ_INFO);
+    const bufInfo = Buffer.from('');
 
     const {
       key,
-    } = this.deriveKey(bufMK, bufInfo, salt);
+    } = await this.cryptograph.deriveKey(bufMK, bufInfo, salt);
 
-    const bufDeciphered = this.aesDecrypt(token, key, iv);
+    const bufDeciphered = this.cryptograph.aesDecrypt(token, key, iv, Buffer.from(JSON.stringify(aad)));
 
     return bufDeciphered.toString();
-  }
-
-  static verifyRSASignature(digest, signature, pem) {
-    return crypto.verify('rsa-sha256', digest, {
-      key: pem,
-      padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
-      saltLength: 32,
-    }, signature);
-  }
-
-  static signWithEcdsa(digest, pem) {
-    return crypto.sign('SHA256', digest, {
-      key: pem,
-      dsaEncoding: 'ieee-p1363',
-    });
   }
 }
 

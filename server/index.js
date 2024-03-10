@@ -39,11 +39,10 @@ app.post('/claim', async (req, res) => {
 
   const result = await endpoints.handshake(publicKey, signingKey, {});
 
-  console.log('claims', result);
   res.json(result);
 });
 
-app.post('protected', async (req, res, next) => {
+app.post('/protected', async (req, res, next) => {
   const {
     headers: {
       authorization,
@@ -97,6 +96,12 @@ app.post('protected', async (req, res, next) => {
   req.url = url;
   req.method = method;
 
+  req.locals = {
+    crypto: cryptoH,
+    eJwt: tokenFactory,
+    secret,
+  };
+
   const originalSend = res.send;
   res.send = (response, ...args) => {
     // console.log('send response', response);
@@ -118,7 +123,12 @@ app.post('protected', async (req, res, next) => {
   return router.handle(req, res, next);
 });
 
+app.use((req, res) => {
+  res.status(404).send("Sorry can't find that!");
+});
+
 app.use((err, req, res, next) => {
+  console.log('ERROR\n', err);
   if (err instanceof ProtocolError) {
     if (process.env.NODE_ENV === 'production') {
       return res.status(400).end();

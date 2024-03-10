@@ -4,7 +4,7 @@
     "description": "Integration tests for test",
     "main": "",
     "scripts": {
-        "single": "./node_modules/.bin/cucumber-js features/single.feature"
+        "single": ".\\node_modules\\.bin\\cucumber-js features\\single.feature"
     },
     "author": "MFT",
     "license": "MIT",

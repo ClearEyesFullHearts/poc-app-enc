@@ -69,6 +69,7 @@ class EJwt {
 
     const bufMK = Buffer.from(secret, 'base64url');
     const bufInfo = Buffer.from(sessionInfo);
+    const bufData = Buffer.from(JSON.stringify(ad));
 
     const {
       key,
@@ -77,13 +78,13 @@ class EJwt {
     const encKey = key.subarray(0, 32);
     const macKey = key.subarray(32);
 
-    const control = this.#helper.getHMAC(macKey, iv, body, salt, Buffer.from(JSON.stringify(ad)));
+    const control = this.#helper.getHMAC(macKey, iv, body, salt, bufData);
 
     if (!mac.equals(control)) {
       throw new EJwtError('jwt authentication failed');
     }
 
-    const bufDeciphered = this.#helper.aesDecrypt(body, encKey, iv);
+    const bufDeciphered = this.#helper.aesDecrypt(body, encKey, iv, bufData);
 
     try {
       return JSON.parse(Buffer.from(bufDeciphered));
