@@ -107,7 +107,7 @@ app.post('/protected', async (req, res, next) => {
     // console.log('send response', response);
     // console.log('res.statusCode', res.statusCode);
     if (Number(res.statusCode) < 300) {
-      endpoints.response(response, auth.tss, {})
+      endpoints.response(response, auth.tss, auth.sig, {})
         .then(({
           message,
           signature,

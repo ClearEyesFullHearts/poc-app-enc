@@ -42,6 +42,15 @@ BeforeAll((cb) => {
 
         self.httpResponse = response;
         if (response.statusCode < 300) {
+          const proof = response.headers['x-signature-response'];
+          const sigKey = this.scenarioVariables.EC_SIG_SERVER_PK;
+
+          const isVerifed = await Helper.cryptograph.verifyWithECDSA(
+            Buffer.from(response.body),
+            Buffer.from(proof, 'base64url'),
+            sigKey,
+          );
+          if (!isVerifed) throw new Error('Signature is wrong');
           self.httpResponse.body = await Helper.decryptResponse(response.body, Buffer.from(tss, 'base64url'));
         }
         return callback(null, response);

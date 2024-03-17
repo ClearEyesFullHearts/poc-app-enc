@@ -21,6 +21,7 @@ Given(/^I get anon claim$/, async function () {
   const {
     token,
     publicKey,
+    signatureKey,
     salt,
     signature,
   } = JSON.parse(this.apickli.httpResponse.body);
@@ -33,6 +34,7 @@ Given(/^I get anon claim$/, async function () {
   const digest = Buffer.from(JSON.stringify({
     token,
     publicKey,
+    signatureKey,
     salt,
   }));
   const isVerified = await Helper.cryptograph.verifyRSASignature(digest, Buffer.from(signature, 'base64url'), rsaPK);
@@ -44,6 +46,7 @@ Given(/^I get anon claim$/, async function () {
   const tss = await Helper.cryptograph.getSharedSecret(EC_ENC_CLIENT_SK, Buffer.from(publicKey, 'base64url'), Buffer.from(salt, 'base64url'));
   this.apickli.storeValueInScenarioScope('SHARED_SECRET', tss.toString('base64url'));
   this.apickli.storeValueInScenarioScope('EC_SIG_CLIENT_SK', EC_SIG_CLIENT_SK.toString('base64url'));
+  this.apickli.storeValueInScenarioScope('EC_SIG_SERVER_PK', signatureKey);
 });
 
 Given(/^I generate a session key pair$/, async function () {

@@ -55,9 +55,15 @@ class Endpoints {
       salt,
     } = await this.#crypto.generateECDHKeys(key);
 
+    const {
+      ssk: sig,
+      spk: signatureKey,
+    } = await this.#crypto.generateECDSAKeys();
+
     const claims = {
       tss: tss.toString('base64url'),
       pk: pkSig,
+      sig,
       user: 'anonymous',
       iat: Date.now() + (1000 * 5),
     };
@@ -68,6 +74,7 @@ class Endpoints {
     const result = {
       token: jwt,
       publicKey: spk.toString('base64url'),
+      signatureKey,
       salt: salt.toString('base64url'),
     };
 
@@ -137,7 +144,7 @@ class Endpoints {
     };
   }
 
-  async response(payload, sharedKey, {
+  async response(payload, sharedKey, sigKey, {
     requestInfo = '', requestAD = {},
   }) {
     if (!payload) {
@@ -167,8 +174,7 @@ class Endpoints {
 
     const message = `${Buffer.concat([iv, salt]).toString('base64url')}.${cipherBuffer.toString('base64url')}`;
 
-    const pem = await this.#secrets.getKeySignature();
-    const sig = await this.#crypto.signWithRSA(Buffer.from(message), pem);
+    const sig = await this.#crypto.signWithEcdsa(Buffer.from(message), sigKey);
 
     return {
       message,

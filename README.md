@@ -13,6 +13,7 @@
 `EC_ENC_SERVER_[SK/PK]`: Server side one time EC key pair used to compute a shared secret (ECDH)  
 `EC_ENC_CLIENT_[SK/PK]`: Client side one time EC key pair used to compute a shared secret (ECDH)  
 `EC_SIG_CLIENT_[SK/PK]`: Client side temporary EC key pair used to sign client communication (ECDSA)  
+`EC_SIG_SERVER_[SK/PK]`: Server side temporary EC key pair used to sign server communication (ECDSA)  
 `SSK_ENC`: Computed shared secret key by `EC_ENC_[CLIENT/SERVER]_[SK/PK]` for messages encryption
 
 ## eJWT
@@ -33,15 +34,16 @@ The footer is the HMAC of the ciphertext, the salt, the iv and any additional da
 ### Get anonymous claim
 Clara is the client, Seb is the server.  
   
-1. Clara generates `EC_ENC_CLIENT` and `EC_SIG_CLIENT`
+1. Clara generates `EC_ENC_CLIENT_[SK/PK]` and `EC_SIG_CLIENT_[SK/PK]`
 2. Clara POST `EC_ENC_CLIENT_PK` and `EC_SIG_CLIENT_PK` to Seb
-3. Seb generates `EC_ENC_SERVER`
+3. Seb generates `EC_ENC_SERVER_[SK/PK]` and `EC_SIG_SERVER_[SK/PK]`
 4. Seb computes `SSK_ENC` with `EC_ENC_SERVER_SK` and `EC_ENC_CLIENT_PK`
-5. Seb creates an eJWT containing `SSK_ENC` and `EC_SIG_CLIENT_PK`
-6. Seb sign the eJWT and `EC_ENC_SERVER_PK` with `SK_SIG_ANON_CLAIM`
-7. Seb returns the eJWT, `EC_ENC_SERVER_PK` and the signature to Clara
+5. Seb creates an eJWT containing `SSK_ENC` and `EC_SIG_CLIENT_PK` and `EC_SIG_SERVER_SK`
+6. Seb sign the eJWT,  `EC_ENC_SERVER_PK` and `EC_SIG_SERVER_PK` with `SK_SIG_ANON_CLAIM`
+7. Seb returns the eJWT, `EC_ENC_SERVER_PK`, `EC_SIG_SERVER_PK` and the signature to Clara
 8. Clara verify the response signature with `PK_SIG_ANON_CLAIM`
-9. Clara computes `SSK_ENC` with `EC_ENC_SERVER_PK` and `EC_ENC_CLIENT_SK` and store it
+9. Clara computes `SSK_ENC` with `EC_ENC_SERVER_PK` and `EC_ENC_CLIENT_SK` and stores it
+10. Clara stores `EC_SIG_SERVER_PK`
 
 From this point Clara has the shared secret in session and Seb will get it through the eJWT, so every communication from Clara to Seb will look like:
 - Clara encrypt her request with the shared secret `SSK_ENC`
@@ -50,17 +52,17 @@ From this point Clara has the shared secret in session and Seb will get it throu
   
 On its side Seb will:
 - Check the integrity of the eJWT thanks to the HMAC
-- Decrypt the eJWT, to get the shared secret (`SSK_ENC`) and Clara's signature public key (`EC_SIG_CLIENT_PK`)
+- Decrypt the eJWT, to get the shared secret (`SSK_ENC`), Clara's signature public key (`EC_SIG_CLIENT_PK`) and its own signature secret key `EC_SIG_SERVER_SK`
 - Verify the integrity of Clara's encrypted request
 - Decrypt the request with the shared secret
   
 When its time for Seb to respond:
 - Seb encrypt the response with the shared secret (`SSK_ENC`)
-- Seb sign the encrypted response with its RSA private key (`SK_SIG_ANON_CLAIM`)
+- Seb sign the encrypted response with its temporary signature key `EC_SIG_SERVER_SK`
 - Seb sends the encrypted response and the signature to Clara
   
 So Clara:
-- Clara verify the integrity of the message with Seb's RSA public key (`PK_SIG_ANON_CLAIM`)
+- Clara verify the integrity of the message with Seb's temporary signature key `EC_SIG_SERVER_PK`
 - Clara decrypt the response with the shared secret (`SSK_ENC`)
 
 ### After that
