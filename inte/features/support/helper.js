@@ -1,6 +1,3 @@
-const crypto = require('crypto');
-// import CryptoHelper from '@protocol/crypto/cryptoHelper';
-
 const Salt = require('./salt');
 const IV = require('./iVector');
 
