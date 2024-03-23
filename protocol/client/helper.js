@@ -1,5 +1,6 @@
 import Encoder from './util.js';
 
+// eslint-disable-next-line no-undef
 const { subtle } = globalThis.crypto;
 
 class ClientHelper {
@@ -8,6 +9,14 @@ class ClientHelper {
   #DERIVATION_ALGO;
 
   #SHARED_INFO;
+
+  #AES_ALGO;
+
+  #AUTH_TAG_LENGTH;
+
+  #IV_SIZE;
+
+  #RSA_SIG_ALGO;
 
   get sharedSecretSize() {
     switch (this.#NAMED_CURVE) {
@@ -22,20 +31,24 @@ class ClientHelper {
 
   constructor({
     ecCurveName = 'P-256',
-    // symmetricEncryptionAlgo = 'aes-256-gcm',
-    derivationAlgo = 'sha256',
+    symmetricEncryptionAlgo = 'AES-GCM',
+    derivationAlgo = 'SHA-256',
     // macAlgo = 'sha256',
-    // rsaSignAlgo = 'rsa-sha256',
+    rsaSignAlgo = 'RSA-PSS',
     // ecdsaSignAlgo = 'sha256',
     sharedSecretInfo = 'uniformly_random_shared_secret',
+    authTagLength = 16,
+    ivSize = 16,
   }) {
     this.#NAMED_CURVE = ecCurveName;
-    // this.#AES_ALGO = symmetricEncryptionAlgo;
+    this.#AES_ALGO = symmetricEncryptionAlgo;
     this.#DERIVATION_ALGO = derivationAlgo;
     // this.#MAC_ALGO = macAlgo;
-    // this.#RSA_SIG_ALGO = rsaSignAlgo;
+    this.#RSA_SIG_ALGO = rsaSignAlgo;
     // this.#ECDSA_SIG_ALGO = ecdsaSignAlgo;
     this.#SHARED_INFO = sharedSecretInfo;
+    this.#AUTH_TAG_LENGTH = authTagLength;
+    this.#IV_SIZE = ivSize;
   }
 
   async generateECDHKeys() {
@@ -60,7 +73,7 @@ class ClientHelper {
   async getSharedSecret(pk, sk, salt) {
     const bufferSK = Encoder.base64ToBuffer(sk);
     const bufferPK = Encoder.base64ToBuffer(pk);
-    // import bob public key
+    // import other public key
     const PK = await subtle.importKey(
       'raw',
       bufferPK,
@@ -72,7 +85,7 @@ class ClientHelper {
       [], // no key usage
     );
 
-    // import alice secret key
+    // import my secret key
     const SK = await subtle.importKey(
       'pkcs8', // match previous export
       bufferSK,
@@ -119,11 +132,140 @@ class ClientHelper {
 
     return Encoder.bufferToBase64(bufferKey);
   }
+
   // async generateECDSAKeys();
-  // async deriveKey();
-  // async aesEncrypt();
-  // async aesDecrypt();
-  // async verifyRSASignature();
+  async deriveKey(masterKey, info, usedSalt, size = 32) {
+    const masterKeyBuff = Encoder.base64ToBuffer(masterKey);
+    const key = await subtle.importKey(
+      'raw',
+      masterKeyBuff,
+      { name: 'HKDF' },
+      false,
+      ['deriveBits'],
+    );
+
+    const salt = new ArrayBuffer(size);
+    const infoBuf = Encoder.clearTextToBuffer(info);
+    let trueSaltBuf;
+    if (usedSalt) {
+      trueSaltBuf = Encoder.base64ToBuffer(usedSalt);
+    } else {
+      trueSaltBuf = Encoder.getRandomBuffer(64);
+    }
+
+    const bufferKey = await subtle.deriveBits(
+      {
+        name: 'HKDF',
+        hash: this.#DERIVATION_ALGO,
+        salt,
+        info: Encoder.concatBuffers(infoBuf, trueSaltBuf),
+      },
+      key,
+      size * 8, // size of the derived key (bits)
+    );
+
+    return {
+      key: Encoder.bufferToBase64(bufferKey),
+      salt: Encoder.bufferToBase64(trueSaltBuf),
+    };
+  }
+
+  async aesEncrypt(message, key, aad) {
+    const bufferKey = Encoder.base64ToBuffer(key);
+    const keyObj = await subtle.importKey(
+      'raw',
+      bufferKey,
+      {
+        name: this.#AES_ALGO,
+      },
+      false,
+      ['encrypt'],
+    );
+
+    let aadBuf;
+    if (aad) {
+      aadBuf = Encoder.clearTextToBuffer(aad);
+    }
+
+    const bufferIv = Encoder.getRandomBuffer(this.#IV_SIZE);
+    const bufferTxt = Encoder.clearTextToBuffer(message);
+    const bufferCypher = await subtle.encrypt({
+      name: this.#AES_ALGO,
+      iv: bufferIv,
+      tagLength: this.#AUTH_TAG_LENGTH * 8, // length of the auth tag
+      additionalData: aadBuf,
+    }, keyObj, bufferTxt);
+
+    return {
+      cipherBuffer: Encoder.bufferToBase64(bufferCypher),
+      iv: Encoder.bufferToBase64(bufferIv),
+    };
+  }
+
+  async aesDecrypt(cipherText, key, iv, aad) {
+    const bufferKey = Encoder.base64ToBuffer(key);
+    const bufferIv = Encoder.base64ToBuffer(iv);
+    const bufferCypher = Encoder.base64ToBuffer(cipherText);
+
+    const importedKey = await subtle.importKey(
+      'raw',
+      bufferKey,
+      {
+        name: this.#AES_ALGO,
+      },
+      false,
+      ['decrypt'],
+    );
+
+    let aadBuf;
+    if (aad) {
+      aadBuf = Encoder.clearTextToBuffer(aad);
+    }
+
+    const bufferText = await subtle.decrypt(
+      {
+        name: this.#AES_ALGO,
+        iv: bufferIv,
+        tagLength: this.#AUTH_TAG_LENGTH * 8,
+        additionalData: aadBuf,
+      },
+      importedKey,
+      bufferCypher,
+    );
+
+    return Encoder.bufferToClearText(bufferText);
+  }
+
+  async verifyRSASignature(digest, signature, pem) {
+    const buffer = Encoder.clearTextToBuffer(digest);
+
+    const bufferPemContent = Encoder.base64ToBuffer(pem);
+    const key = await subtle.importKey(
+      'spki',
+      bufferPemContent,
+      {
+        name: this.#RSA_SIG_ALGO,
+        hash: this.#DERIVATION_ALGO,
+      },
+      true,
+      ['verify'],
+    );
+
+    const signatureBuffer = Encoder.base64ToBuffer(signature);
+    const result = await subtle.verify(
+      {
+        name: this.#RSA_SIG_ALGO,
+        saltLength: 32,
+      },
+      key,
+      signatureBuffer,
+      buffer,
+    );
+
+    return result;
+  }
   // async signWithEcdsa();
   // async verifyWithECDSA();
 }
+
+export default ClientHelper;

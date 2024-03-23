@@ -46,6 +46,7 @@ Clara is the client, Seb is the server.
 9. Clara computes `SSK_ENC` with `EC_ENC_SERVER_PK` and `EC_ENC_CLIENT_SK` and stores it
 10. Clara stores `EC_SIG_SERVER_PK`
 
+### Regular communication
 From this point Clara has the shared secret in session and Seb will get it through the eJWT, so every communication from Clara to Seb will look like:
 - Clara encrypt her request with the shared secret `SSK_ENC`
 - Clara sign her encrypted request with `EC_SIG_CLIENT_SK`
