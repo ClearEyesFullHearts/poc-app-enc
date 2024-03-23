@@ -23,6 +23,7 @@ The body is entirely encrypted using `MASTER_SK_ENC_AUTH`. It cannot be decrypte
 - The user's claim (anonymous or authenticated).
 - The computed shared secret `SSK_ENC` that will be used to encrypt/decrypt the messages between server and client.
 - The client temporary signature public key `EC_SIG_CLIENT_PK` used to verify the client's messages.
+- The server temporary signature secret key `EC_SIG_SERVER_SK` used to sign the server's messages.
 - An Issued AT claim (iat)
 ### Header
 The header is the salt used to derive `MASTER_SK_ENC_AUTH` prepended to the IV used to encrypt the body in clear text (base64url encoded). It is used to decrypt the body.  
