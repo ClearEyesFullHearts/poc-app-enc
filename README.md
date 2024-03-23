@@ -1,4 +1,4 @@
-# Server's stateless session management
+# Application Layer Security
 
 ## Permanent Keys
 
