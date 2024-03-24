@@ -34,7 +34,6 @@ class Endpoints {
     this.#SigPKValidator = new RegExp(`^[a-zA-Z0-9\\-_]{${this.#crypto.ecdsaPkSize}}$`);
 
     const headerSize = CryptoHelper.base64urlSize(CryptoHelper.ivSize + CryptoHelper.saltSize);
-
     this.#reqValidator = new RegExp(`^[a-zA-Z0-9\\-_]{${headerSize}}\\.[a-zA-Z0-9\\-_]+?$`);
   }
 

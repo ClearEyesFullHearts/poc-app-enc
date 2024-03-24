@@ -15,7 +15,7 @@ class Encoder {
   }
 
   static base64ToBuffer(b64Txt) {
-    const str = atob(b64Txt).replace(/\-/g, '+').replace(/_/g, '/'); // decode base64url
+    const str = atob(b64Txt.replace(/\-/g, '+').replace(/_/g, '/')); // decode base64url
     return this.clearTextToBuffer(str);
   }
 

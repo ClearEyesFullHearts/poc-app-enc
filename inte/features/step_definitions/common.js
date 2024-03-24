@@ -3,17 +3,17 @@ const Helper = require('../support/helper');
 
 Given(/^I get anon claim$/, async function () {
   const {
-    ssk: EC_ENC_CLIENT_SK,
-    spk: EC_ENC_CLIENT_PK,
-  } = await Helper.cryptograph.generateECDHKeys();
+    privateKey: EC_ENC_CLIENT_SK,
+    publicKey: EC_ENC_CLIENT_PK,
+  } = await Helper.cryptoHelper.generateECDHKeys();
   const {
-    ssk: EC_SIG_CLIENT_SK,
-    spk: EC_SIG_CLIENT_PK,
-  } = await Helper.cryptograph.generateECDSAKeys();
+    privateKey: EC_SIG_CLIENT_SK,
+    publicKey: EC_SIG_CLIENT_PK,
+  } = await Helper.cryptoHelper.generateECDSAKeys();
 
   this.apickli.setRequestBody(JSON.stringify({
-    publicKey: EC_ENC_CLIENT_PK.toString('base64url'),
-    signingKey: EC_SIG_CLIENT_PK.toString('base64url'),
+    publicKey: EC_ENC_CLIENT_PK,
+    signingKey: EC_SIG_CLIENT_PK,
   }));
 
   await this.post('/claim');
@@ -31,38 +31,38 @@ Given(/^I get anon claim$/, async function () {
 
   const rsaPK = this.PK_SIG_ANON_CLAIM;
 
-  const digest = Buffer.from(JSON.stringify({
+  const digest = JSON.stringify({
     token,
     publicKey,
     signatureKey,
     salt,
-  }));
-  const isVerified = await Helper.cryptograph.verifyRSASignature(digest, Buffer.from(signature, 'base64url'), rsaPK);
+  });
+  const isVerified = await Helper.cryptoHelper.verifyRSASignature(digest, signature, rsaPK);
 
   if (!isVerified) {
     throw new Error('RSA signature is wrong');
   }
 
-  const tss = await Helper.cryptograph.getSharedSecret(EC_ENC_CLIENT_SK, Buffer.from(publicKey, 'base64url'), Buffer.from(salt, 'base64url'));
-  this.apickli.storeValueInScenarioScope('SHARED_SECRET', tss.toString('base64url'));
-  this.apickli.storeValueInScenarioScope('EC_SIG_CLIENT_SK', EC_SIG_CLIENT_SK.toString('base64url'));
+  const tss = await Helper.cryptoHelper.getSharedSecret(publicKey, EC_ENC_CLIENT_SK, salt);
+  this.apickli.storeValueInScenarioScope('SHARED_SECRET', tss);
+  this.apickli.storeValueInScenarioScope('EC_SIG_CLIENT_SK', EC_SIG_CLIENT_SK);
   this.apickli.storeValueInScenarioScope('EC_SIG_SERVER_PK', signatureKey);
 });
 
 Given(/^I generate a session key pair$/, async function () {
   const {
-    ssk: EC_ENC_CLIENT_SK,
-    spk: EC_ENC_CLIENT_PK,
-  } = await Helper.cryptograph.generateECDHKeys();
+    privateKey: EC_ENC_CLIENT_SK,
+    publicKey: EC_ENC_CLIENT_PK,
+  } = await Helper.cryptoHelper.generateECDHKeys();
   const {
-    ssk: EC_SIG_CLIENT_SK,
-    spk: EC_SIG_CLIENT_PK,
-  } = await Helper.cryptograph.generateECDSAKeys();
+    privateKey: EC_SIG_CLIENT_SK,
+    publicKey: EC_SIG_CLIENT_PK,
+  } = await Helper.cryptoHelper.generateECDSAKeys();
 
-  this.apickli.storeValueInScenarioScope('PK', EC_ENC_CLIENT_PK.toString('base64url'));
-  // this.apickli.storeValueInScenarioScope('EC_ENC_CLIENT_SK', EC_ENC_CLIENT_SK.toString('base64url'));
-  // this.apickli.storeValueInScenarioScope('EC_SIG_CLIENT_PK', EC_SIG_CLIENT_PK.toString('base64url'));
-  // this.apickli.storeValueInScenarioScope('EC_SIG_CLIENT_SK', EC_SIG_CLIENT_SK.toString('base64url'));
+  console.log('pk length\n', EC_SIG_CLIENT_PK.length, EC_SIG_CLIENT_PK);
+
+  this.apickli.storeValueInScenarioScope('PK_ENC', EC_ENC_CLIENT_PK);
+  this.apickli.storeValueInScenarioScope('PK_SIG', EC_SIG_CLIENT_PK);
 });
 
 When(/^I API POST to (.*)$/, async function (resource) {

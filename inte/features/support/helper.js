@@ -1,28 +1,26 @@
-const Salt = require('./salt');
-const IV = require('./iVector');
-
 class Helper {
   static cryptograph;
 
   static async init() {
-    const CryptoHelper = (await import('@protocol/crypto/cryptoHelper.js')).default;
-    this.cryptograph = new CryptoHelper({});
+    const MyHelper = (await import('@protocol/client/helper.js')).default;
+    this.cryptoHelper = new MyHelper({});
   }
 
-  static async encryptRequest(bufferReq, masterKey, aad = {}) {
-    const bufMK = Buffer.from(masterKey, 'base64url');
-    const bufInfo = Buffer.from('');
+  static async encryptRequest(req, masterKey, aad = {}) {
     const {
       key,
       salt,
-    } = await this.cryptograph.deriveKey(bufMK, bufInfo);
+    } = await this.cryptoHelper.deriveKey(masterKey, '');
 
     const {
       iv,
-      cipherBuffer,
-    } = this.cryptograph.aesEncrypt(bufferReq, key, Buffer.from(JSON.stringify(aad)));
+      cipherText,
+    } = await this.cryptoHelper.aesEncrypt(req, key, JSON.stringify(aad));
 
-    return `${Buffer.concat([iv, salt]).toString('base64url')}.${cipherBuffer.toString('base64url')}`;
+    const bufIV = Buffer.from(iv, 'base64url');
+    const bufSalt = Buffer.from(salt, 'base64url');
+
+    return `${Buffer.concat([bufIV, bufSalt]).toString('base64url')}.${cipherText}`;
   }
 
   static async decryptResponse(ciphertext, masterKey, aad = {}) {
@@ -36,24 +34,20 @@ class Helper {
     }
 
     const saltAndIv = Buffer.from(saltAndIvb64, 'base64url');
-    const token = Buffer.from(tokenb64, 'base64url');
 
-    const iv = saltAndIv.subarray(0, IV.Size);
-    const salt = saltAndIv.subarray(IV.Size);
-    if (salt.length !== Salt.Size) {
+    const iv = saltAndIv.subarray(0, 16);
+    const salt = saltAndIv.subarray(16);
+    if (salt.length !== 64) {
       throw new Error('iv or salt size mismatch');
     }
 
-    const bufMK = Buffer.from(masterKey, 'base64');
-    const bufInfo = Buffer.from('');
-
     const {
       key,
-    } = await this.cryptograph.deriveKey(bufMK, bufInfo, salt);
+    } = await this.cryptoHelper.deriveKey(masterKey, '', salt.toString('base64url'));
 
-    const bufDeciphered = this.cryptograph.aesDecrypt(token, key, iv, Buffer.from(JSON.stringify(aad)));
+    const txt = await this.cryptoHelper.aesDecrypt(tokenb64, key, iv.toString('base64url'), JSON.stringify(aad));
 
-    return bufDeciphered.toString();
+    return txt;
   }
 }
 

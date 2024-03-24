@@ -20,10 +20,10 @@ BeforeAll((cb) => {
 
       const tss = this.scenarioVariables.SHARED_SECRET;
 
-      const body = await Helper.encryptRequest(Buffer.from(JSON.stringify(encBody)), Buffer.from(tss, 'base64url'), {});
+      const body = await Helper.encryptRequest(JSON.stringify(encBody), tss, {});
 
       const pem = this.scenarioVariables.EC_SIG_CLIENT_SK;
-      const signature = await Helper.cryptograph.signWithEcdsa(Buffer.from(body), pem);
+      const signature = await Helper.cryptoHelper.signWithEcdsa(body, pem);
 
       options.url = `${this.domain}/protected`;
       options.method = 'POST';
@@ -37,21 +37,16 @@ BeforeAll((cb) => {
         if (error) {
           return callback(error);
         }
-        // console.log('raw response.body', response.body);
-        // console.log('raw response.statusCode', response.statusCode);
 
         self.httpResponse = response;
         if (response.statusCode < 300) {
           const proof = response.headers['x-signature-response'];
           const sigKey = this.scenarioVariables.EC_SIG_SERVER_PK;
 
-          const isVerifed = await Helper.cryptograph.verifyWithECDSA(
-            Buffer.from(response.body),
-            Buffer.from(proof, 'base64url'),
-            sigKey,
-          );
+          const isVerifed = await Helper.cryptoHelper.verifyWithECDSA(response.body, proof, sigKey);
+
           if (!isVerifed) throw new Error('Signature is wrong');
-          self.httpResponse.body = await Helper.decryptResponse(response.body, Buffer.from(tss, 'base64url'));
+          self.httpResponse.body = await Helper.decryptResponse(response.body, tss);
         }
         return callback(null, response);
       });
@@ -65,8 +60,12 @@ Before(function () {
   const host = 'localhost:4000';
   const protocol = 'http';
 
-  const pem = fs.readFileSync(`${__dirname}/../data/rsaPK.pem`);
-  this.PK_SIG_ANON_CLAIM = pem;
+  const pem = fs.readFileSync(`${__dirname}/../data/rsaPK.pem`, 'utf-8');
+  const publicHeader = '-----BEGIN PUBLIC KEY-----';
+  const publicFooter = '-----END PUBLIC KEY-----';
+  const trimmedPK = pem.replace(/\n/g, '');
+  const pemPK = trimmedPK.substring(publicHeader.length, trimmedPK.length - publicFooter.length);
+  this.PK_SIG_ANON_CLAIM = pemPK;
 
   this.apickli = new apickli.Apickli(protocol, host, 'data');
   this.apickli.addRequestHeader('Cache-Control', 'no-cache');

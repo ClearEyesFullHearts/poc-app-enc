@@ -80,7 +80,8 @@ components:
       required:
         - username
         - password
-        - pk
+        - publicKey
+        - signingKey
       additionalProperties: false
       properties:
         username:
@@ -89,7 +90,10 @@ components:
         password:
           type: string
           format: byte
-        pk:
+        publicKey:
           type: string
           pattern: '^[a-zA-Z0-9\-_]{87}$'
+        signingKey:
+          type: string
+          pattern: '^[a-zA-Z0-9\-_]{122}$'
     

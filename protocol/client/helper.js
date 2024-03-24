@@ -18,6 +18,10 @@ class ClientHelper {
 
   #RSA_SIG_ALGO;
 
+  #RSA_SIG_HASH;
+
+  #ECDSA_HASH;
+
   get sharedSecretSize() {
     switch (this.#NAMED_CURVE) {
       case 'P-384':
@@ -33,9 +37,9 @@ class ClientHelper {
     ecCurveName = 'P-256',
     symmetricEncryptionAlgo = 'AES-GCM',
     derivationAlgo = 'SHA-256',
-    // macAlgo = 'sha256',
     rsaSignAlgo = 'RSA-PSS',
-    // ecdsaSignAlgo = 'sha256',
+    rsaSignHash = 'SHA-256',
+    ecdsaHash = 'SHA-256',
     sharedSecretInfo = 'uniformly_random_shared_secret',
     authTagLength = 16,
     ivSize = 16,
@@ -43,9 +47,9 @@ class ClientHelper {
     this.#NAMED_CURVE = ecCurveName;
     this.#AES_ALGO = symmetricEncryptionAlgo;
     this.#DERIVATION_ALGO = derivationAlgo;
-    // this.#MAC_ALGO = macAlgo;
     this.#RSA_SIG_ALGO = rsaSignAlgo;
-    // this.#ECDSA_SIG_ALGO = ecdsaSignAlgo;
+    this.#RSA_SIG_HASH = rsaSignHash;
+    this.#ECDSA_HASH = ecdsaHash;
     this.#SHARED_INFO = sharedSecretInfo;
     this.#AUTH_TAG_LENGTH = authTagLength;
     this.#IV_SIZE = ivSize;
@@ -133,7 +137,25 @@ class ClientHelper {
     return Encoder.bufferToBase64(bufferKey);
   }
 
-  // async generateECDSAKeys();
+  async generateECDSAKeys() {
+    const myKeyPair = await subtle.generateKey(
+      {
+        name: 'ECDSA',
+        namedCurve: this.#NAMED_CURVE,
+      },
+      true,
+      ['sign', 'verify'],
+    );
+
+    const PK = await subtle.exportKey('spki', myKeyPair.publicKey);
+    const SK = await subtle.exportKey('pkcs8', myKeyPair.privateKey);
+
+    return {
+      privateKey: Encoder.bufferToBase64(SK),
+      publicKey: Encoder.bufferToBase64(PK),
+    };
+  }
+
   async deriveKey(masterKey, info, usedSalt, size = 32) {
     const masterKeyBuff = Encoder.base64ToBuffer(masterKey);
     const key = await subtle.importKey(
@@ -197,7 +219,7 @@ class ClientHelper {
     }, keyObj, bufferTxt);
 
     return {
-      cipherBuffer: Encoder.bufferToBase64(bufferCypher),
+      cipherText: Encoder.bufferToBase64(bufferCypher),
       iv: Encoder.bufferToBase64(bufferIv),
     };
   }
@@ -245,7 +267,7 @@ class ClientHelper {
       bufferPemContent,
       {
         name: this.#RSA_SIG_ALGO,
-        hash: this.#DERIVATION_ALGO,
+        hash: this.#RSA_SIG_HASH,
       },
       true,
       ['verify'],
@@ -264,8 +286,62 @@ class ClientHelper {
 
     return result;
   }
-  // async signWithEcdsa();
-  // async verifyWithECDSA();
+
+  async signWithEcdsa(digest, pem) {
+    const data = Encoder.clearTextToBuffer(digest);
+    const keyMaterial = Encoder.base64ToBuffer(pem);
+
+    const signingKey = await subtle.importKey(
+      'pkcs8',
+      keyMaterial,
+      {
+        name: 'ECDSA',
+        namedCurve: this.#NAMED_CURVE,
+      },
+      false,
+      ['sign'],
+    );
+
+    const signature = await subtle.sign(
+      {
+        name: 'ECDSA',
+        hash: this.#ECDSA_HASH,
+      },
+      signingKey,
+      data,
+    );
+
+    return Encoder.bufferToBase64(signature);
+  }
+
+  async verifyWithECDSA(digest, signature, pem) {
+    const data = Encoder.clearTextToBuffer(digest);
+    const proof = Encoder.base64ToBuffer(signature);
+    const keyMaterial = Encoder.base64ToBuffer(pem);
+
+    const verifyKey = await subtle.importKey(
+      'spki',
+      keyMaterial,
+      {
+        name: 'ECDSA',
+        namedCurve: this.#NAMED_CURVE,
+      },
+      false,
+      ['verify'],
+    );
+
+    const isTrue = await subtle.verify(
+      {
+        name: 'ECDSA',
+        hash: this.#ECDSA_HASH,
+      },
+      verifyKey,
+      proof,
+      data,
+    );
+
+    return isTrue;
+  }
 }
 
 export default ClientHelper;

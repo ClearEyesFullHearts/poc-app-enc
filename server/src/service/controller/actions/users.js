@@ -8,7 +8,8 @@ export async function logUser(req, res) {
   const {
     username,
     password,
-    pk,
+    publicKey,
+    signingKey,
   } = req.body;
 
   const {
@@ -19,15 +20,22 @@ export async function logUser(req, res) {
     },
   } = req;
 
-  const key = Buffer.from(pk, 'base64url');
+  const key = Buffer.from(publicKey, 'base64url');
   const {
     spk,
     tss,
     salt,
   } = await crypto.generateECDHKeys(key);
 
+  const {
+    ssk: sig,
+    spk: signatureKey,
+  } = await crypto.generateECDSAKeys();
+
   const claims = {
-    tss,
+    tss: tss.toString('base64url'),
+    pk: signingKey,
+    sig,
     user: {
       id: 0,
       username,
@@ -35,11 +43,13 @@ export async function logUser(req, res) {
     },
     iat: Date.now(),
   };
+
   const authKey = await secret.getKeyAuth();
   const jwt = await eJwt.sign(claims, authKey, username);
 
   res.set('x-auth-token', jwt);
-  res.set('x-server-pk', Buffer.concat([spk, salt]).toString('base64url'));
+  res.set('x-servenc-pk', Buffer.concat([spk, salt]).toString('base64url'));
+  res.set('x-servsig-pk', signatureKey);
   res.json({
     username,
     password,

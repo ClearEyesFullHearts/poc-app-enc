@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', {
-  namedCurve: 'secp521r1',
+  namedCurve: 'prime256v1',
   publicKeyEncoding: { type: 'spki', format: 'pem' },
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
 });
@@ -17,8 +17,37 @@ const publicHeader = '-----BEGIN PUBLIC KEY-----';
 const publicFooter = '-----END PUBLIC KEY-----';
 const trimmedPK = publicKey.replace(/\n/g, '');
 const pemContentPublicKey = trimmedPK.substring(publicHeader.length, trimmedPK.length - publicFooter.length);
+const mykey = Buffer.from(pemContentPublicKey, 'base64').toString('base64url');
 
-console.log("Public key length:\n", Buffer.from(pemContentPublicKey, 'base64').toString('base64url').length);
+console.log("Public key\n", mykey);
+console.log("Public key length:\n", mykey.length);
+
+const { subtle } = globalThis.crypto;
+
+function bufferToBase64(buffer) {
+  const str = String.fromCharCode.apply(null, new Uint8Array(buffer));
+  return btoa(str)
+    .replace(/\//g, '_')
+    .replace(/\+/g, '-')
+    .replace(/=+$/, ''); // encode base64url
+}
+
+const myKeyPair = await subtle.generateKey(
+  {
+    name: 'ECDSA',
+    namedCurve: 'P-256',
+  },
+  true,
+  ['sign', 'verify'],
+);
+
+
+const PK = await subtle.exportKey('spki', myKeyPair.publicKey);
+const SK = await subtle.exportKey('pkcs8', myKeyPair.privateKey);
+
+console.log('PK\n', bufferToBase64(PK))
+console.log('PK length\n', bufferToBase64(PK).length)
+// console.log('SK', bufferToBase64(SK))
 
 // const privateHeader = '-----BEGIN PRIVATE KEY-----';
 // const privateFooter = '-----END PRIVATE KEY-----';
