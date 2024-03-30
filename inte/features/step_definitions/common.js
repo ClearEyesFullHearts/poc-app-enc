@@ -1,68 +1,17 @@
-const { Given, When } = require('@cucumber/cucumber');
-const Helper = require('../support/helper');
-
-Given(/^I get anon claim$/, async function () {
-  const {
-    privateKey: EC_ENC_CLIENT_SK,
-    publicKey: EC_ENC_CLIENT_PK,
-  } = await Helper.cryptoHelper.generateECDHKeys();
-  const {
-    privateKey: EC_SIG_CLIENT_SK,
-    publicKey: EC_SIG_CLIENT_PK,
-  } = await Helper.cryptoHelper.generateECDSAKeys();
-
-  this.apickli.setRequestBody(JSON.stringify({
-    publicKey: EC_ENC_CLIENT_PK,
-    signingKey: EC_SIG_CLIENT_PK,
-  }));
-
-  await this.post('/claim');
-
-  const {
-    token,
-    publicKey,
-    signatureKey,
-    salt,
-    signature,
-  } = JSON.parse(this.apickli.httpResponse.body);
-
-  this.apickli.setAccessTokenFromResponseBodyPath('$.token');
-  this.apickli.setBearerToken();
-
-  const rsaPK = this.PK_SIG_ANON_CLAIM;
-
-  const digest = JSON.stringify({
-    token,
-    publicKey,
-    signatureKey,
-    salt,
-  });
-  const isVerified = await Helper.cryptoHelper.verifyRSASignature(digest, signature, rsaPK);
-
-  if (!isVerified) {
-    throw new Error('RSA signature is wrong');
-  }
-
-  const tss = await Helper.cryptoHelper.getSharedSecret(publicKey, EC_ENC_CLIENT_SK, salt);
-  this.apickli.storeValueInScenarioScope('SHARED_SECRET', tss);
-  this.apickli.storeValueInScenarioScope('EC_SIG_CLIENT_SK', EC_SIG_CLIENT_SK);
-  this.apickli.storeValueInScenarioScope('EC_SIG_SERVER_PK', signatureKey);
-});
+const { Given, When, Then } = require('@cucumber/cucumber');
 
 Given(/^I generate a session key pair$/, async function () {
   const {
-    privateKey: EC_ENC_CLIENT_SK,
-    publicKey: EC_ENC_CLIENT_PK,
-  } = await Helper.cryptoHelper.generateECDHKeys();
-  const {
-    privateKey: EC_SIG_CLIENT_SK,
-    publicKey: EC_SIG_CLIENT_PK,
-  } = await Helper.cryptoHelper.generateECDSAKeys();
-
-  console.log('pk length\n', EC_SIG_CLIENT_PK.length, EC_SIG_CLIENT_PK);
+    EC_ENC_CLIENT_PK,
+    EC_ENC_CLIENT_SK,
+    EC_SIG_CLIENT_PK,
+    EC_SIG_CLIENT_SK,
+  } = await this.apickli.alsClient.generateKeys();
 
   this.apickli.storeValueInScenarioScope('PK_ENC', EC_ENC_CLIENT_PK);
   this.apickli.storeValueInScenarioScope('PK_SIG', EC_SIG_CLIENT_PK);
+  this.apickli.storeValueInScenarioScope('SK_ENC', EC_ENC_CLIENT_SK);
+  this.apickli.storeValueInScenarioScope('SK_SIG', EC_SIG_CLIENT_SK);
 });
 
 When(/^I API POST to (.*)$/, async function (resource) {
@@ -74,4 +23,20 @@ When(/^I API POST to (.*)$/, async function (resource) {
       else resolve();
     });
   });
+});
+
+Then(/^I set session from response headers$/, async function () {
+  const encSK = this.apickli.scenarioVariables.SK_ENC;
+  const sigSK = this.apickli.scenarioVariables.SK_SIG;
+
+  const token = this.apickli.getResponseObject().headers['x-auth-token'];
+  const [salt, publicKey] = this.apickli.getResponseObject().headers['x-servenc-pk'].split('.');
+  const signatureKey = this.apickli.getResponseObject().headers['x-servsig-pk'];
+
+  await this.apickli.alsClient.renewAuth(
+    { encSK, sigSK },
+    {
+      token, publicKey, salt, signatureKey,
+    },
+  );
 });

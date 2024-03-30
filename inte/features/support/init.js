@@ -1,62 +1,39 @@
 const apickli = require('apickli');
-const request = require('request');
 const fs = require('fs');
 const {
   Before, BeforeAll,
 } = require('@cucumber/cucumber');
-const Helper = require('./helper');
 
 BeforeAll((cb) => {
-  Helper.init().then(() => {
-    apickli.Apickli.prototype.sendEncrypted = async function sendEncrypted(method, resource, callback) {
-      const self = this;
+  apickli.Apickli.prototype.sendEncrypted = async function func(method, resource, callback) {
+    const self = this;
 
-      const options = this.httpRequestOptions || {};
-      const encBody = {};
-      encBody.url = resource;
-      encBody.method = method;
-      encBody.headers = this.headers;
-      encBody.body = this.requestBody;
-
-      const tss = this.scenarioVariables.SHARED_SECRET;
-
-      const body = await Helper.encryptRequest(JSON.stringify(encBody), tss, {});
-
-      const pem = this.scenarioVariables.EC_SIG_CLIENT_SK;
-      const signature = await Helper.cryptoHelper.signWithEcdsa(body, pem);
-
-      options.url = `${this.domain}/protected`;
-      options.method = 'POST';
-      options.headers.Authorization = this.headers.Authorization;
-      options.headers['X-Signature-Request'] = signature.toString('base64url');
-      options.headers['Content-Type'] = 'text/plain';
-      options.headers['Content-Length'] = Buffer.from(body, 'utf8').length;
-      options.body = body;
-
-      request(options, async (error, response) => {
-        if (error) {
-          return callback(error);
-        }
-
-        self.httpResponse = response;
-        if (response.statusCode < 300) {
-          const proof = response.headers['x-signature-response'];
-          const sigKey = this.scenarioVariables.EC_SIG_SERVER_PK;
-
-          const isVerifed = await Helper.cryptoHelper.verifyWithECDSA(response.body, proof, sigKey);
-
-          if (!isVerifed) throw new Error('Signature is wrong');
-          self.httpResponse.body = await Helper.decryptResponse(response.body, tss);
-        }
-        return callback(null, response);
-      });
+    const options = {
+      ...this.httpRequestOptions,
+      method,
+      headers: this.headers,
+      body: this.requestBody,
     };
 
-    cb();
-  });
+    try {
+      const response = await this.alsClient.call(resource, options);
+
+      self.httpResponse.headers = {};
+      response.headers.forEach((value, key) => {
+        self.httpResponse.headers[key] = value;
+      });
+      self.httpResponse.body = await response.text();
+      self.httpResponse.statusCode = response.status;
+      callback(null, self.httpResponse);
+    } catch (err) {
+      callback(err);
+    }
+  };
+  cb();
 });
 
-Before(function () {
+Before(async function () {
+  const ALSClient = (await import('@protocol/client')).default;
   const host = 'localhost:4000';
   const protocol = 'http';
 
@@ -67,9 +44,22 @@ Before(function () {
   const pemPK = trimmedPK.substring(publicHeader.length, trimmedPK.length - publicFooter.length);
   this.PK_SIG_ANON_CLAIM = pemPK;
 
+  const storage = {
+    get: (n) => this.apickli.scenarioVariables[n],
+    set: (n, v) => {
+      this.apickli.storeValueInScenarioScope(n, v);
+    },
+    has: (n) => !!this.apickli.scenarioVariables[n],
+    clear: (n) => {
+      this.apickli.storeValueInScenarioScope(n, undefined);
+    },
+  };
+
   this.apickli = new apickli.Apickli(protocol, host, 'data');
+  this.apickli.alsClient = new ALSClient(`${protocol}://${host}`, storage);
   this.apickli.addRequestHeader('Cache-Control', 'no-cache');
   this.apickli.addRequestHeader('Content-Type', 'application/json');
+  this.apickli.storeValueInScenarioScope('PK_SIG_ANON_CLAIM', this.PK_SIG_ANON_CLAIM);
 
   this.get = (url) => new Promise((resolve, reject) => {
     this.apickli.get(url, (error) => {

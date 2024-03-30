@@ -45,10 +45,10 @@ export async function logUser(req, res) {
   };
 
   const authKey = await secret.getKeyAuth();
-  const jwt = await eJwt.sign(claims, authKey, username);
+  const jwt = await eJwt.sign(claims, authKey);
 
   res.set('x-auth-token', jwt);
-  res.set('x-servenc-pk', Buffer.concat([spk, salt]).toString('base64url'));
+  res.set('x-servenc-pk', `${salt.toString('base64url')}.${spk.toString('base64url')}`);
   res.set('x-servsig-pk', signatureKey);
   res.json({
     username,

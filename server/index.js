@@ -46,6 +46,7 @@ app.post('/protected', async (req, res, next) => {
   const {
     headers: {
       authorization,
+      'x-anon-authorization': anonAuth,
       'x-signature-request': proof,
       'content-type': contentType,
     },
@@ -56,10 +57,16 @@ app.post('/protected', async (req, res, next) => {
     return res.status(400).json({ message: 'content type should be plain text' });
   }
 
-  if (!authorization) {
+  if (!authorization && !anonAuth) {
     return res.status(400).json({ message: 'missing authorization header' });
   }
-  const [type, tokenBase64] = authorization.split(' ');
+  let type;
+  let tokenBase64;
+  if (authorization) {
+    [type, tokenBase64] = authorization.split(' ');
+  } else if (anonAuth) {
+    [type, tokenBase64] = anonAuth.split(' ');
+  }
   if (type !== 'Bearer') {
     return res.status(400).json({ message: 'malformed authorization header' });
   }
@@ -68,6 +75,10 @@ app.post('/protected', async (req, res, next) => {
     auth,
     body: clearRequest,
   } = await endpoints.request(tokenBase64, cipheredRequest, proof, {});
+
+  if ((authorization && auth.user === 'anonymous') || (anonAuth && auth.user !== 'anonymous')) {
+    return res.status(400).json({ message: 'authorization header mismatch' });
+  }
 
   const {
     headers,
@@ -104,8 +115,6 @@ app.post('/protected', async (req, res, next) => {
 
   const originalSend = res.send;
   res.send = (response, ...args) => {
-    // console.log('send response', response);
-    // console.log('res.statusCode', res.statusCode);
     if (Number(res.statusCode) < 300) {
       endpoints.response(response, auth.tss, auth.sig, {})
         .then(({
