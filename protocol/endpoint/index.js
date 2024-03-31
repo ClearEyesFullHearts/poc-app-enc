@@ -1,185 +1,139 @@
 import { EnvSecretManager } from '@protocol/secrets';
 import Ejwt from '@protocol/ejwt';
 import CryptoHelper from '@protocol/crypto';
-import { EndpointError } from '@protocol/errors';
+import ProxyResponse from './proxies.js';
+import Translator from './translator.js';
 
-class Endpoints {
-  #secrets;
+class ExpressEndpoint {
+  #translator;
 
-  #ejwt;
-
-  #crypto;
-
-  #EncPKValidator;
-
-  #SigPKValidator;
-
-  #reqValidator;
-
-  #ttl;
-
-  constructor({
-    timeToLive = 900000,
-    secretManager = new EnvSecretManager(),
-    jwtFactory = new Ejwt(),
-  }) {
-    this.#secrets = secretManager;
-    this.#ejwt = jwtFactory;
-    this.#crypto = this.#ejwt.crypto;
-    this.#ttl = timeToLive;
-
-    const encPKSize = CryptoHelper.base64urlSize(this.#crypto.ecdhPkSize);
-
-    this.#EncPKValidator = new RegExp(`^[a-zA-Z0-9\\-_]{${encPKSize}}$`);
-    this.#SigPKValidator = new RegExp(`^[a-zA-Z0-9\\-_]{${this.#crypto.ecdsaPkSize}}$`);
-
-    const headerSize = CryptoHelper.base64urlSize(CryptoHelper.ivSize + CryptoHelper.saltSize);
-    this.#reqValidator = new RegExp(`^[a-zA-Z0-9\\-_]{${headerSize}}\\.[a-zA-Z0-9\\-_]+?$`);
-  }
-
-  async handshake(pkEnc, pkSig, {
-    sessionInfo = '', sessionAD = {},
-  }) {
-    if (!this.#EncPKValidator.test(pkEnc)) {
-      throw new EndpointError('Invalid encryption public key format');
-    }
-    if (!this.#SigPKValidator.test(pkSig)) {
-      throw new EndpointError('Invalid signature public key format');
-    }
-
-    const key = Buffer.from(pkEnc, 'base64url');
-    const {
-      spk,
-      tss,
-      salt,
-    } = await this.#crypto.generateECDHKeys(key);
-
-    const {
-      ssk: sig,
-      spk: signatureKey,
-    } = await this.#crypto.generateECDSAKeys();
-
-    const claims = {
-      tss: tss.toString('base64url'),
-      pk: pkSig,
-      sig,
-      user: 'anonymous',
-      iat: Date.now() + (1000 * 5),
-    };
-
-    const authKey = await this.#secrets.getKeyAuth();
-    const jwt = await this.#ejwt.sign(claims, authKey, sessionInfo, sessionAD);
-
-    const result = {
-      token: jwt,
-      publicKey: spk.toString('base64url'),
-      signatureKey,
-      salt: salt.toString('base64url'),
-    };
-
-    const digest = Buffer.from(JSON.stringify(result));
-    const signKey = await this.#secrets.getKeySignature();
-    const signature = await this.#crypto.signWithRSA(digest, signKey);
-
-    return {
-      ...result,
-      signature: signature.toString('base64url'),
-    };
-  }
-
-  async request(token, cipheredBody, proof, {
-    sessionInfo = '', requestInfo = '', sessionAD = {}, requestAD = {},
-  }) {
-    if (!this.#reqValidator.test(cipheredBody)) {
-      throw new EndpointError('ciphered body is malformed');
-    }
-
-    const authKey = await this.#secrets.getKeyAuth();
-    const auth = await this.#ejwt.verify(token, authKey, sessionInfo, sessionAD);
-
-    const {
-      iat,
-      tss,
-      pk,
-    } = auth;
-
-    if (Date.now() > (iat + this.#ttl)) {
-      throw new EndpointError('Time to live is expired');
-    }
-
-    const digest = Buffer.from(cipheredBody);
-    const signature = Buffer.from(proof, 'base64url');
-    const pkVerif = Buffer.from(pk, 'base64url');
-
-    const isVerifiedBody = await this.#crypto.verifyWithECDSA(digest, signature, pkVerif);
-    if (!isVerifiedBody) {
-      throw new EndpointError('ciphered body is invalid');
-    }
-
-    const [
-      saltAndIvb64,
-      bodyb64,
-    ] = cipheredBody.split('.');
-
-    const saltAndIv = Buffer.from(saltAndIvb64, 'base64url');
-    const body = Buffer.from(bodyb64, 'base64url');
-
-    const iv = saltAndIv.subarray(0, CryptoHelper.ivSize);
-    const salt = saltAndIv.subarray(CryptoHelper.ivSize);
-
-    const bufMK = Buffer.from(tss, 'base64url');
-    const bufInfo = Buffer.from(requestInfo);
-
-    const {
-      key,
-    } = await this.#crypto.deriveKey(bufMK, bufInfo, salt);
-
-    const bufAD = Buffer.from(JSON.stringify(requestAD));
-    const clearText = this.#crypto.aesDecrypt(body, key, iv, bufAD);
-
-    return {
-      auth,
-      body: JSON.parse(clearText.toString()),
-    };
-  }
-
-  async response(payload, sharedKey, sigKey, {
-    requestInfo = '', requestAD = {},
-  }) {
-    if (!payload) {
-      return payload;
-    }
-    let bufferBody;
-    if (Buffer.isBuffer(payload)) {
-      bufferBody = payload;
-    } else if (Object.prototype.toString.call(payload) === '[object String]') {
-      bufferBody = Buffer.from(payload);
-    } else if (typeof payload === 'boolean') {
-      bufferBody = Buffer.from(payload.toString());
+  constructor(translator) {
+    if (translator) {
+      this.#translator = translator;
     } else {
-      bufferBody = Buffer.from(JSON.stringify(payload));
+      const cryptoH = new CryptoHelper({});
+      const tokenFactory = new Ejwt(cryptoH);
+
+      const secret = new EnvSecretManager();
+
+      this.#translator = new Translator({
+        secretManager: secret,
+        jwtFactory: tokenFactory,
+      });
     }
-    const bufMK = Buffer.from(sharedKey, 'base64url');
-    const bufInfo = Buffer.from(requestInfo);
+  }
+
+  async anonymous(req, res, next) {
     const {
-      key,
-      salt,
-    } = await this.#crypto.deriveKey(bufMK, bufInfo);
+      body: {
+        publicKey,
+        signingKey,
+      },
+    } = req;
 
+    try {
+      const result = await this.#translator.handshake(publicKey, signingKey, {});
+
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async identified(req, res, next) {
     const {
-      iv,
-      cipherBuffer,
-    } = this.#crypto.aesEncrypt(bufferBody, key, Buffer.from(JSON.stringify(requestAD)));
+      headers: {
+        authorization,
+        'x-anon-authorization': anonAuth,
+        'x-signature-request': proof,
+        'content-type': contentType,
+      },
+      body: cipheredRequest,
+    } = req;
 
-    const message = `${Buffer.concat([iv, salt]).toString('base64url')}.${cipherBuffer.toString('base64url')}`;
+    if (contentType !== 'text/plain') {
+      return res.status(400).json({ message: 'content type should be plain text' });
+    }
 
-    const sig = await this.#crypto.signWithEcdsa(Buffer.from(message), sigKey);
+    if (!authorization && !anonAuth) {
+      return res.status(400).json({ message: 'missing authorization header' });
+    }
+    let type;
+    let tokenBase64;
+    if (authorization) {
+      [type, tokenBase64] = authorization.split(' ');
+    } else if (anonAuth) {
+      [type, tokenBase64] = anonAuth.split(' ');
+    }
+    if (type !== 'Bearer') {
+      return res.status(400).json({ message: 'malformed authorization header' });
+    }
 
-    return {
-      message,
-      signature: sig.toString('base64url'),
-    };
+    try {
+      const isAnonymous = !!anonAuth;
+
+      const {
+        auth,
+        body: clearRequest,
+      } = await this.#translator.request(isAnonymous, tokenBase64, cipheredRequest, proof, {});
+
+      const {
+        headers,
+        body,
+        url,
+        method,
+      } = clearRequest;
+
+      if (!headers || !method || !url || (!body && method !== 'GET')) {
+        return res.status(400).end();
+      }
+
+      req.auth = auth;
+      req.headers = Object.keys(headers)
+        .reduce((o, p) => ({ ...o, [p.toLowerCase()]: headers[p] }), {});
+
+      switch (req.headers['content-type']) {
+        case 'application/json':
+          req.body = JSON.parse(body);
+          break;
+        default:
+          req.body = body;
+          break;
+      }
+
+      req.originalUrl = url;
+      req.url = url;
+      req.method = method;
+
+      const {
+        als,
+        ...cleanBody
+      } = req.body;
+
+      if (als) {
+        req.body = cleanBody;
+        const {
+          publicKey,
+          signingKey,
+        } = als;
+        if (!this.#translator.alsEncKeyValidator.test(publicKey)) {
+          return res.status(400).json({ message: 'als encryption key format' });
+        }
+        if (!this.#translator.alsSigKeyValidator.test(signingKey)) {
+          return res.status(400).json({ message: 'als signature key format' });
+        }
+
+        // eslint-disable-next-line no-param-reassign
+        res = await ProxyResponse.encryptAndRenew(res, this.#translator, auth, als);
+      } else {
+        // eslint-disable-next-line no-param-reassign
+        res = await ProxyResponse.encrypt(res, this.#translator, auth);
+      }
+
+      return next();
+    } catch (err) {
+      return next(err);
+    }
   }
 }
-
-export default Endpoints;
+export default ExpressEndpoint;

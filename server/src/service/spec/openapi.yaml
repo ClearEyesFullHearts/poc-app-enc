@@ -40,18 +40,10 @@ paths:
       responses:
         '200':
           description: A user
-          headers:
-            x-auth-token:
-              schema:
-                type: string
-            x-server-pk:
-              schema:
-                type: string
-                pattern: '^[a-zA-Z0-9\-_]{87}$'
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/NewUser"
+                $ref: "#/components/schemas/ConnectedUser"
         default:
           description: unexpected error
     
@@ -80,8 +72,6 @@ components:
       required:
         - username
         - password
-        - publicKey
-        - signingKey
       additionalProperties: false
       properties:
         username:
@@ -90,10 +80,20 @@ components:
         password:
           type: string
           format: byte
-        publicKey:
+    ConnectedUser:
+      type: object
+      required:
+        - username
+        - password
+        - issuerClaim
+      additionalProperties: false
+      properties:
+        username:
           type: string
-          pattern: '^[a-zA-Z0-9\-_]{87}$'
-        signingKey:
+          format: email
+        password:
           type: string
-          pattern: '^[a-zA-Z0-9\-_]{122}$'
+          format: byte
+        issuerClaim:
+          type: object
     

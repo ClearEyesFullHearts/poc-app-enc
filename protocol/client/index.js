@@ -280,6 +280,15 @@ class Client {
 
     const respBody = await this.#decryptResponse(cypherResponse);
 
+    if (isAnonymous) {
+      await Promise.all([
+        this.#storage.clear(this.#config.tokenName),
+        this.#storage.clear(this.#config.sharedSecretName),
+        this.#storage.clear(this.#config.signingKeyName),
+        this.#storage.clear(this.#config.verifyingKeyName),
+      ]);
+    }
+
     return new Response(respBody, {
       status: resp.status,
       statusText: resp.statusText,
@@ -287,7 +296,7 @@ class Client {
     });
   }
 
-  async login(resource, options) {
+  async keyRenewalCall(resource, options) {
     const {
       EC_ENC_CLIENT_PK: publicKey,
       EC_ENC_CLIENT_SK: encSK,

@@ -10,7 +10,7 @@ Scenario: Create a user
 
 Scenario: Log as a user
   Given I generate a session key pair
-  And I set body to { "username": "test@example.com", "password": "aaaaaaaaaaaa", "publicKey": "`PK_ENC`", "signingKey": "`PK_SIG`" }
+  And I set body to { "username": "test@example.com", "password": "aaaaaaaaaaaa" }
   When I API POST to /login
   Then response header x-auth-token should exist
   And response header x-servenc-pk should exist

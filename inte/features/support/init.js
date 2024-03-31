@@ -16,7 +16,7 @@ BeforeAll((cb) => {
     };
 
     try {
-      const response = await this.alsClient.call(resource, options);
+      const response = await this.alsClient.keyRenewalCall(resource, options);
 
       self.httpResponse.headers = {};
       response.headers.forEach((value, key) => {

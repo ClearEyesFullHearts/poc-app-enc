@@ -8,50 +8,19 @@ export async function logUser(req, res) {
   const {
     username,
     password,
-    publicKey,
-    signingKey,
   } = req.body;
 
-  const {
-    locals: {
-      crypto,
-      eJwt,
-      secret,
-    },
-  } = req;
-
-  const key = Buffer.from(publicKey, 'base64url');
-  const {
-    spk,
-    tss,
-    salt,
-  } = await crypto.generateECDHKeys(key);
-
-  const {
-    ssk: sig,
-    spk: signatureKey,
-  } = await crypto.generateECDSAKeys();
-
-  const claims = {
-    tss: tss.toString('base64url'),
-    pk: signingKey,
-    sig,
+  const issuerClaim = {
     user: {
       id: 0,
       username,
       role: 'user',
     },
-    iat: Date.now(),
+    ttl: Date.now() + 600000,
   };
-
-  const authKey = await secret.getKeyAuth();
-  const jwt = await eJwt.sign(claims, authKey);
-
-  res.set('x-auth-token', jwt);
-  res.set('x-servenc-pk', `${salt.toString('base64url')}.${spk.toString('base64url')}`);
-  res.set('x-servsig-pk', signatureKey);
   res.json({
     username,
     password,
+    issuerClaim,
   });
 }
