@@ -11,6 +11,19 @@ process.env.MASTER_KEY_AUTH = crypto.randomBytes(32).toString('base64url');
 process.env.RSA_KEY_SIGNATURE = pem;
 
 const app = express();
+app.use((req, res, next) => {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,PUT,POST,DELETE,OPTION',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Content-Length, X-Anon-Authorization, X-Signature-Request',
+    'Access-Control-Expose-Headers': '*',
+  };
+  Object.keys(corsHeaders).forEach((h) => {
+    res.header(h, corsHeaders[h]);
+  });
+  next();
+});
+app.options('/*', (req, res) => res.sendStatus(200));
 app.use(morgan('dev'));
 const router = new Service().start();
 

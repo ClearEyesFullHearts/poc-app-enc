@@ -139,6 +139,15 @@ class Client {
     ]);
   }
 
+  async clearAuth() {
+    await Promise.all([
+      this.#storage.clear(this.#config.tokenName),
+      this.#storage.clear(this.#config.sharedSecretName),
+      this.#storage.clear(this.#config.signingKeyName),
+      this.#storage.clear(this.#config.verifyingKeyName),
+    ]);
+  }
+
   async handShake() {
     const {
       EC_ENC_CLIENT_PK,
