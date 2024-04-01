@@ -5,6 +5,11 @@ module.exports = {
       createUser(req, res, next);
     });
   },
+  listUsers: (req, res, next) => {
+    import('./actions/users.js').then(({ listUsers }) => {
+      listUsers(req, res, next);
+    });
+  },
   logUser: (req, res, next) => {
     import('./actions/users.js').then(({ logUser }) => {
       logUser(req, res, next);

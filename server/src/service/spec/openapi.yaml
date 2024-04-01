@@ -8,6 +8,22 @@ servers:
   - url: http://localhost:4000
 paths:
   /users:
+    get:
+      summary: Get all users
+      operationId: listUsers
+      x-eov-operation-handler: api.cjs
+      responses:
+        '200':
+          description: All users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+                
+        default:
+          description: unexpected error
     post:
       summary: Create a new user
       operationId: createUser
@@ -67,6 +83,17 @@ components:
         password:
           type: string
           format: byte
+    User:
+      type: object
+      required:
+        - username
+        - role
+      additionalProperties: false
+      properties:
+        username:
+          type: string
+        role:
+          type: string
     Connection:
       type: object
       required:

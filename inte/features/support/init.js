@@ -5,7 +5,7 @@ const {
 } = require('@cucumber/cucumber');
 
 BeforeAll((cb) => {
-  apickli.Apickli.prototype.sendEncrypted = async function func(method, resource, callback) {
+  apickli.Apickli.prototype.sendEncrypted = async function func(isRenewal, method, resource, callback) {
     const self = this;
 
     const options = {
@@ -15,8 +15,16 @@ BeforeAll((cb) => {
       body: this.requestBody,
     };
 
+    const timeMS = Date.now();
     try {
-      const response = await this.alsClient.keyRenewalCall(resource, options);
+      let response;
+      if (isRenewal) {
+        response = await this.alsClient.callAndRenew(resource, options);
+      } else {
+        response = await this.alsClient.call(resource, options);
+      }
+
+      console.log('fetch duration', Date.now() - timeMS);
 
       self.httpResponse.headers = {};
       response.headers.forEach((value, key) => {

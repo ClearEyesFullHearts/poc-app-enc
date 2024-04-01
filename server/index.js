@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import express from 'express';
+import morgan from 'morgan';
 import ExpressEndpoint from '@protocol/endpoint';
 import { ProtocolError } from '@protocol/errors';
 import Service from './src/service/index.js';
@@ -10,6 +11,7 @@ process.env.MASTER_KEY_AUTH = crypto.randomBytes(32).toString('base64url');
 process.env.RSA_KEY_SIGNATURE = pem;
 
 const app = express();
+app.use(morgan('dev'));
 const router = new Service().start();
 
 app.use(express.text());

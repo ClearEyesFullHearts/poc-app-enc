@@ -16,9 +16,22 @@ Given(/^I generate a session key pair$/, async function () {
 
 When(/^I API POST to (.*)$/, async function (resource) {
   const target = this.apickli.replaceVariables(resource);
+  const isRenewal = target === '/login';
 
   await new Promise((resolve, reject) => {
-    this.apickli.sendEncrypted('POST', target, (err) => {
+    this.apickli.sendEncrypted(isRenewal, 'POST', target, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+});
+
+When(/^I API GET (.*)$/, async function (resource) {
+  const target = this.apickli.replaceVariables(resource);
+  this.apickli.requestBody = undefined;
+
+  await new Promise((resolve, reject) => {
+    this.apickli.sendEncrypted(false, 'GET', target, (err) => {
       if (err) reject(err);
       else resolve();
     });

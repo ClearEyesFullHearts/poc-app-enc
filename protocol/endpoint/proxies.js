@@ -26,7 +26,7 @@ class ProxyResponse {
         const {
           issuerClaim,
           ...body
-        } = response;
+        } = JSON.parse(response);
         translator.response(body, keys.tss, keys.sig, {})
           .then(({
             message,

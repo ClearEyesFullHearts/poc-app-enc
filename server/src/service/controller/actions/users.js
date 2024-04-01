@@ -3,6 +3,16 @@ export function createUser(req, res) {
   res.json({ success: true });
 }
 
+export function listUsers(req, res) {
+  console.log('listUsers', req.auth);
+  res.json([
+    { username: 'test', role: 'user' },
+    { username: 'hello', role: 'user' },
+    { username: 'admin', role: 'admin' },
+    { username: 'muad dib', role: 'messiah' },
+  ]);
+}
+
 export async function logUser(req, res) {
   console.log('logUser', req.body);
   const {

@@ -92,35 +92,31 @@ class ExpressEndpoint {
       req.headers = Object.keys(headers)
         .reduce((o, p) => ({ ...o, [p.toLowerCase()]: headers[p] }), {});
 
-      switch (req.headers['content-type']) {
-        case 'application/json':
-          req.body = JSON.parse(body);
-          break;
-        default:
-          req.body = body;
-          break;
+      let als = false;
+      let cleanBody = body;
+      if (body && req.headers['content-type'] === 'application/json') {
+        cleanBody = JSON.parse(body);
+        if (cleanBody.als) {
+          als = cleanBody.als;
+          delete cleanBody.als;
+        }
       }
 
       req.originalUrl = url;
       req.url = url;
       req.method = method;
-
-      const {
-        als,
-        ...cleanBody
-      } = req.body;
+      req.body = cleanBody;
 
       if (als) {
-        req.body = cleanBody;
         const {
           publicKey,
           signingKey,
         } = als;
         if (!this.#translator.alsEncKeyValidator.test(publicKey)) {
-          return res.status(400).json({ message: 'als encryption key format' });
+          return res.status(400).json({ message: 'wrong als encryption key format' });
         }
         if (!this.#translator.alsSigKeyValidator.test(signingKey)) {
-          return res.status(400).json({ message: 'als signature key format' });
+          return res.status(400).json({ message: 'wrong als signature key format' });
         }
 
         // eslint-disable-next-line no-param-reassign

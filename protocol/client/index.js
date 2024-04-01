@@ -296,7 +296,7 @@ class Client {
     });
   }
 
-  async keyRenewalCall(resource, options) {
+  async callAndRenew(resource, options) {
     const {
       EC_ENC_CLIENT_PK: publicKey,
       EC_ENC_CLIENT_SK: encSK,
