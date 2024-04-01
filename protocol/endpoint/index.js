@@ -73,7 +73,12 @@ class ExpressEndpoint {
       const isAnonymous = !!anonAuth;
 
       const {
-        auth,
+        auth: {
+          tss,
+          pk,
+          sig,
+          ...auth
+        },
         body: clearRequest,
       } = await this.#translator.request(isAnonymous, tokenBase64, cipheredRequest, proof, {});
 
@@ -120,10 +125,10 @@ class ExpressEndpoint {
         }
 
         // eslint-disable-next-line no-param-reassign
-        res = await ProxyResponse.encryptAndRenew(res, this.#translator, auth, als);
+        res = await ProxyResponse.encryptAndRenew(res, this.#translator, { tss, sig }, als);
       } else {
         // eslint-disable-next-line no-param-reassign
-        res = await ProxyResponse.encrypt(res, this.#translator, auth);
+        res = await ProxyResponse.encrypt(res, this.#translator, { tss, sig });
       }
 
       return next();

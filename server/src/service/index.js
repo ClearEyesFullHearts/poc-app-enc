@@ -1,7 +1,7 @@
 import path from 'node:path';
 import express from 'express';
 import * as OpenApiValidator from 'express-openapi-validator';
-import morgan from 'morgan';
+// import morgan from 'morgan';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
@@ -9,7 +9,7 @@ class Service {
   constructor() {
     this.app = express.Router();
     this.app.options('/*', (req, res) => res.sendStatus(200));
-    this.app.use(morgan('combined'));
+    // this.app.use(morgan('combined'));
 
     this.dir = dirname(fileURLToPath(import.meta.url));
     this.doc = path.join(this.dir, 'spec/openapi.yaml');
