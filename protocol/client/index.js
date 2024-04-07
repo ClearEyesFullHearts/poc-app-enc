@@ -326,10 +326,27 @@ class Client {
 
     const resp = await this.call(resource, loginOptions);
 
-    if (resp.headers.has('x-auth-token') && resp.headers.has('x-servenc-pk') && resp.headers.has('x-servsig-pk')) {
+    if (resp.headers.has('x-authority-sig')
+          && resp.headers.has('x-auth-token')
+          && resp.headers.has('x-servenc-pk')
+          && resp.headers.has('x-servsig-pk')) {
+      const proof = resp.headers.get('x-authority-sig');
       const token = resp.headers.get('x-auth-token');
       const [salt, servPK] = resp.headers.get('x-servenc-pk').split('.');
       const signatureKey = resp.headers.get('x-servsig-pk');
+
+      const authority = await this.#storage.get(this.#config.authorityName);
+      const digest = JSON.stringify({
+        token,
+        publicKey: servPK,
+        signatureKey,
+        salt,
+      });
+      const isVerified = await this.#crypto.verifyRSASignature(digest, proof, authority);
+
+      if (!isVerified) {
+        throw new Error('RSA signature is wrong');
+      }
 
       await this.renewAuth(
         { encSK, sigSK },

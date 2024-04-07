@@ -28,7 +28,7 @@ class ProxyResponse {
           ...body
         } = JSON.parse(response);
         translator.response(body, keys.tss, keys.sig, {})
-          .then(({
+          .then(async ({
             message,
             signature,
           }) => {
@@ -38,14 +38,24 @@ class ProxyResponse {
                 ...alsClaim,
               };
 
-              translator.ejwt.sign(claims, authKey)
-                .then((jwt) => {
-                  res.set('x-auth-token', jwt);
-                  res.set('x-servenc-pk', `${salt.toString('base64url')}.${spk.toString('base64url')}`);
-                  res.set('x-servsig-pk', signatureKey);
-                  res.set('x-signature-response', signature);
-                  originalSend.apply(res, [message, ...args]);
-                });
+              const jwt = await translator.ejwt.sign(claims, authKey);
+              const result = {
+                token: jwt,
+                publicKey: spk.toString('base64url'),
+                signatureKey,
+                salt: salt.toString('base64url'),
+              };
+
+              const digest = Buffer.from(JSON.stringify(result));
+              const signKey = await translator.secrets.getKeySignature();
+              const authSig = await translator.crypto.signWithRSA(digest, signKey);
+
+              res.set('x-auth-token', result.token);
+              res.set('x-servenc-pk', `${result.salt}.${result.publicKey}`);
+              res.set('x-servsig-pk', result.signatureKey);
+              res.set('x-authority-sig', authSig.toString('base64url'));
+              res.set('x-signature-response', signature);
+              originalSend.apply(res, [message, ...args]);
             } else {
               res.set('x-signature-response', signature);
               originalSend.apply(res, [message, ...args]);
