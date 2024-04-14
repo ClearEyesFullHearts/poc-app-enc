@@ -110,17 +110,19 @@ components:
     ConnectedUser:
       type: object
       required:
-        - username
-        - password
+        - email
+        - id
+        - role
         - issuerClaim
       additionalProperties: false
       properties:
-        username:
+        email:
           type: string
           format: email
-        password:
+        id:
+          type: integer
+        role:
           type: string
-          format: byte
         issuerClaim:
           type: object
     

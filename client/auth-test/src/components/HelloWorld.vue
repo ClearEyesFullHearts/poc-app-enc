@@ -2,11 +2,14 @@
 import { ref } from 'vue'
 import { fetchWrapper } from '../lib/fetchHelper';
 
-defineProps({
+const props = defineProps({
   msg: String,
-})
+});
+
+const title = ref('Vite + Vue');
 
 async function login() {
+  const time = Date.now();
   const body = {
     username: 'test@example.com',
     password: 'aaaaaaaa',
@@ -16,13 +19,16 @@ async function login() {
 
   const resBody = await res.json();
   console.log('response body', resBody);
+
+  title.value = resBody.username;
+  count.value = Date.now() - time;
 }
 
 const count = ref(0)
 </script>
 
 <template>
-  <h1>{{ msg }}</h1>
+  <h1>{{ title }}</h1>
 
   <div class="card">
     <button type="button" @click="login()">count is {{ count }}</button>

@@ -1,5 +1,13 @@
+import Datalayer from '../../datalayer/memory.js';
+
 export function createUser(req, res) {
   console.log('createUser', req.body);
+  const {
+    username,
+    password,
+  } = req.body;
+
+  Datalayer.createUser(username, password);
   res.json({ success: true });
 }
 
@@ -20,17 +28,14 @@ export async function logUser(req, res) {
     password,
   } = req.body;
 
+  const user = Datalayer.identifyUser(username, password);
+
   const issuerClaim = {
-    user: {
-      id: 0,
-      username,
-      role: 'user',
-    },
+    user,
     ttl: Date.now() + 600000,
   };
   res.json({
-    username,
-    password,
+    ...user,
     issuerClaim,
   });
 }

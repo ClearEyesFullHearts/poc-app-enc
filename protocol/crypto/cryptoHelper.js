@@ -352,6 +352,22 @@ class CryptoHelper {
     }
   }
 
+  getSimpleHash(...data) {
+    try {
+      const hash = crypto.createHash(this.#MAC_ALGO);
+
+      data.forEach((d) => {
+        if (!Buffer.isBuffer(d)) {
+          throw new CryptoError('Crypto Helper class only deals with buffers');
+        }
+        hash.update(d);
+      });
+      return hash.digest();
+    } catch (err) {
+      throw new CryptoError(err);
+    }
+  }
+
   async signWithRSA(digest, pem) {
     if (!Buffer.isBuffer(digest)) {
       throw new CryptoError('Crypto Helper class only deals with buffers');

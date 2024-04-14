@@ -14,8 +14,9 @@ Scenario: Log as a user
   Then response header x-auth-token should exist
   And response header x-servenc-pk should exist
   And response header x-servsig-pk should exist
-  Then response body path $.username should be test@example.com
-  Then response body path $.password should be aaaaaaaaaaaa
+  Then response body path $.email should be test@example.com
+  Then response body path $.id should be 1
+  Then response body path $.role should be user
 
   Scenario: Get all users
     Given I set body to { "username": "test@example.com", "password": "aaaaaaaaaaaa" }
