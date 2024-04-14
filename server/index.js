@@ -10,13 +10,30 @@ const pem = fs.readFileSync('./data/rsaSK.pem');
 process.env.MASTER_KEY_AUTH = crypto.randomBytes(32).toString('base64url');
 process.env.RSA_KEY_SIGNATURE = pem;
 
+const reqHeaders = [
+  'Content-Type',
+  'Authorization',
+  'Content-Length',
+  'X-Anon-Authorization',
+  'X-Signature-Request',
+  'X-Client-Enc',
+  'X-Client-Sig',
+];
+const resHeaders = [
+  'x-authority-sig',
+  'x-auth-token',
+  'x-servenc-pk',
+  'x-servsig-pk',
+  'x-signature-response',
+];
+
 const app = express();
 app.use((req, res, next) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,PUT,POST,DELETE,OPTION',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Content-Length, X-Anon-Authorization, X-Signature-Request',
-    'Access-Control-Expose-Headers': '*',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTION',
+    'Access-Control-Allow-Headers': reqHeaders.join(', '),
+    'Access-Control-Expose-Headers': resHeaders.join(', '),
   };
   Object.keys(corsHeaders).forEach((h) => {
     res.header(h, corsHeaders[h]);
@@ -28,12 +45,10 @@ app.use(morgan('dev'));
 const router = new Service().start();
 
 app.use(express.text());
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
 
 const endpoints = new ExpressEndpoint();
 
-app.post('/claim', (req, res, next) => {
+app.get('/claim', (req, res, next) => {
   endpoints.anonymous(req, res, next);
 });
 app.post('/protected', (req, res, next) => {

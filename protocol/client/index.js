@@ -156,17 +156,13 @@ class Client {
       EC_SIG_CLIENT_SK,
     } = await this.generateKeys();
 
-    const body = JSON.stringify({
-      publicKey: EC_ENC_CLIENT_PK,
-      signingKey: EC_SIG_CLIENT_PK,
-    });
-
     const resp = await fetch(`${this.#apiURL}${this.#config.anonClaimPath}`, {
-      method: 'POST',
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'text/plain',
+        'X-Client-Enc': EC_ENC_CLIENT_PK,
+        'X-Client-Sig': EC_SIG_CLIENT_PK,
       },
-      body,
     });
 
     if (!resp.ok) {

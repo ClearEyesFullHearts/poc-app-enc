@@ -25,18 +25,23 @@ class ExpressEndpoint {
 
   async anonymous(req, res, next) {
     const {
-      body: {
-        publicKey,
-        signingKey,
+      headers: {
+        'x-client-enc': publicKey,
+        'x-client-sig': signingKey,
+        'content-type': contentType,
       },
     } = req;
+
+    if (contentType !== 'text/plain') {
+      return res.status(400).json({ message: 'content type should be plain text' });
+    }
 
     try {
       const result = await this.#translator.handshake(publicKey, signingKey, {});
 
-      res.json(result);
+      return res.json(result);
     } catch (err) {
-      next(err);
+      return next(err);
     }
   }
 
