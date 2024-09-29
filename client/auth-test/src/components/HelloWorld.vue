@@ -12,7 +12,7 @@ async function login() {
   const time = Date.now();
   const body = {
     username: 'test@example.com',
-    password: 'aaaaaaaa',
+    password: 'aaaaaaaaaaaa',
   };
 
   const res = await fetchWrapper.login('/login', body);
@@ -20,7 +20,7 @@ async function login() {
   const resBody = await res.json();
   console.log('response body', resBody);
 
-  title.value = resBody.username;
+  title.value = resBody.email;
   count.value = Date.now() - time;
 }
 

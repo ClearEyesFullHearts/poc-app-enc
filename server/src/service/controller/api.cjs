@@ -2,17 +2,29 @@
 module.exports = {
   createUser: (req, res, next) => {
     import('./actions/users.js').then(({ createUser }) => {
-      createUser(req, res, next);
+      try {
+        createUser(req, res, next);
+      } catch (err) {
+        next(err);
+      }
     });
   },
   listUsers: (req, res, next) => {
     import('./actions/users.js').then(({ listUsers }) => {
-      listUsers(req, res, next);
+      try {
+        listUsers(req, res, next);
+      } catch (err) {
+        next(err);
+      }
     });
   },
   logUser: (req, res, next) => {
     import('./actions/users.js').then(({ logUser }) => {
-      logUser(req, res, next);
+      try {
+        logUser(req, res, next);
+      } catch (err) {
+        next(err);
+      }
     });
   },
 };
